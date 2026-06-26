@@ -76,7 +76,7 @@ async function main() {
 
   // Get actual tab name
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const sheetProps = spreadsheet.data.sheets?.[0].properties;
+  const sheetProps = spreadsheet.data.sheets?.[0]?.properties;
   const sheetId = sheetProps?.sheetId ?? 0;
   const sheetTitle = sheetProps?.title ?? 'Sheet1';
   console.log(`  Tab: "${sheetTitle}"`);
