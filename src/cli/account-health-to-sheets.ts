@@ -32,13 +32,21 @@ interface HealthMetrics {
   returnDissatisfactionRate: string;
 }
 
+function statusScore(status: string): string {
+  if (status === 'Good') return '1000';
+  if (status === 'Fair') return '500';
+  if (status === 'Poor') return '0';
+  return 'N/A';
+}
+
 function parseHealthXml(xml: string): HealthMetrics {
   // Extract overall status from the performanceChecklist
   const checklist = xml.match(/<performanceChecklist>([\s\S]*?)<\/performanceChecklist>/)?.[1] ?? '';
   const statuses = [...checklist.matchAll(/<status>([\s\S]*?)<\/status>/g)].map(m => m[1]!.trim());
-  const overall = statuses.includes('Poor') ? 'Poor'
+  const overallStatus = statuses.includes('Poor') ? 'Poor'
     : statuses.includes('Fair') ? 'Fair'
     : statuses.length > 0 ? 'Good' : 'N/A';
+  const overall = statusScore(overallStatus);
 
   // Helper: extract rate from the LAST occurrence of a metrics block/field
   const getLastRate = (blockTag: string, rateTag: string): string => {
