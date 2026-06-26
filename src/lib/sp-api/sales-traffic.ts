@@ -259,10 +259,19 @@ export async function backfillSalesTraffic(opts: {
   const limit = pLimit(opts.concurrency ?? 3);
   let totalRows = 0;
   let done = 0;
+  let lastRequestAt = 0;
 
   await Promise.all(
     tasks.map((t) =>
       limit(async () => {
+        // Enforce minimum 70s between createReport calls (SP-API rate: 1/60s, burst 15)
+        const now = Date.now();
+        const wait = 70_000 - (now - lastRequestAt);
+        if (lastRequestAt > 0 && wait > 0) {
+          await new Promise((r) => setTimeout(r, wait));
+        }
+        lastRequestAt = Date.now();
+
         const { rowsUpserted } = await ingestSalesTrafficDay({
           spClient: opts.spClient,
           pg: opts.pg,

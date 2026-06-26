@@ -35,3 +35,7 @@ coverage/
 .local-cache/
 backfill-*.csv
 *.dump
+
+# Google service account keys — never commit these
+*-key.json
+spincare-sheets-key.json
