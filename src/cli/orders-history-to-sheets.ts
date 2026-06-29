@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-// First run: pulls full history from January 2025 and writes to "Orders" tab.
+// First run: pulls history month by month from January 2025 (SP-API silently
+// returns 0 rows for ranges longer than ~30 days, so chunking is required).
 // Weekly runs: appends the last 8 days below existing data (no overwrite).
-// Dupe Check formula in L1 auto-expands to cover all rows.
 
 import 'dotenv/config';
 import { google } from 'googleapis';
@@ -28,6 +28,33 @@ const MARKETPLACE_IDS = [
 ];
 
 const HEADERS = ['amazon-order-id', 'purchase-date', 'sales-channel', 'sku', 'quantity'];
+
+function getMonthlyChunks(from: Date, to: Date): Array<{ start: Date; end: Date }> {
+  const chunks: Array<{ start: Date; end: Date }> = [];
+  let current = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1));
+  while (current < to) {
+    const start = new Date(current);
+    const end = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
+    chunks.push({ start, end: end > to ? to : end });
+    current = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
+  }
+  return chunks;
+}
+
+async function wait70s() {
+  console.log('  Waiting 70s (rate limit)...');
+  await new Promise(r => setTimeout(r, 70_000));
+}
+
+function toOutputRow(row: Record<string, string>): string[] {
+  return [
+    row['amazon-order-id'] ?? '',
+    row['purchase-date'] ?? '',
+    row['sales-channel'] ?? '',
+    row['sku'] ?? '',
+    row['quantity'] ?? '',
+  ];
+}
 
 async function main() {
   console.log('Orders History → Google Sheets');
@@ -63,51 +90,49 @@ async function main() {
     sheetId = existingTab.properties?.sheetId ?? 0;
   }
 
-  // Detect first run by checking if the sheet has any data in B2
+  // Detect first run by checking if B2 has data
   const checkResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${TAB_NAME}!B2`,
   });
   const isFirstRun = !checkResp.data.values?.[0]?.[0];
 
-  const startDate = isFirstRun
-    ? HISTORY_START
-    : new Date(Date.now() - 8 * 24 * 60 * 60 * 1000); // last 8 days for weekly append
-
   if (isFirstRun) {
-    console.log(`First run — pulling full history from ${HISTORY_START.toISOString().slice(0, 10)}`);
-  } else {
-    console.log(`Weekly run — appending from ${startDate.toISOString().slice(0, 10)} to today`);
-  }
+    // ── Initial backfill: fetch month by month ──────────────────────────────
+    console.log(`First run — pulling history month by month from ${HISTORY_START.toISOString().slice(0, 10)}`);
 
-  console.log('\nFetching orders report...');
-  const report = await runReport(spClient, {
-    reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-    marketplaceIds: MARKETPLACE_IDS,
-    dataStartTime: startDate,
-    dataEndTime: new Date(),
-  });
+    const now = new Date();
+    const months = getMonthlyChunks(HISTORY_START, now);
+    console.log(`  ${months.length} monthly chunks to fetch\n`);
 
-  const rows = parseTsv(report.rawText);
-  console.log(`  ${rows.length} order lines fetched`);
+    const allRows: string[][] = [];
 
-  const outputRows = rows
-    .filter(row => row['order-status'] !== 'Cancelled')
-    .map(row => [
-      row['amazon-order-id'] ?? '',
-      row['purchase-date'] ?? '',
-      row['sales-channel'] ?? '',
-      row['sku'] ?? '',
-      row['quantity'] ?? '',
-    ]);
+    for (let i = 0; i < months.length; i++) {
+      const { start, end } = months[i]!;
+      const label = start.toISOString().slice(0, 7);
+      console.log(`[${i + 1}/${months.length}] ${label}`);
 
-  outputRows.sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
-  console.log(`  ${outputRows.length} rows after filtering Cancelled`);
+      const report = await runReport(spClient, {
+        reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+        marketplaceIds: MARKETPLACE_IDS,
+        dataStartTime: start,
+        dataEndTime: end,
+      });
 
-  console.log('\nWriting to Google Sheets...');
+      const rows = parseTsv(report.rawText)
+        .filter(r => r['order-status'] !== 'Cancelled')
+        .map(toOutputRow);
 
-  if (isFirstRun) {
-    // Clear, resize, and write full history in chunks
+      console.log(`  ${rows.length} rows`);
+      allRows.push(...rows);
+
+      if (i < months.length - 1) await wait70s();
+    }
+
+    allRows.sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
+    console.log(`\nTotal: ${allRows.length} rows across all months`);
+
+    // Clear, resize, write header
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: {
@@ -117,7 +142,7 @@ async function main() {
             updateSheetProperties: {
               properties: {
                 sheetId,
-                gridProperties: { rowCount: outputRows.length + 100, columnCount: 12 },
+                gridProperties: { rowCount: allRows.length + 100, columnCount: 12 },
               },
               fields: 'gridProperties.rowCount,gridProperties.columnCount',
             },
@@ -126,7 +151,6 @@ async function main() {
       },
     });
 
-    // Write header row
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${TAB_NAME}!A1`,
@@ -135,20 +159,21 @@ async function main() {
     });
 
     // Write data in chunks of 10,000 rows
-    const totalChunks = Math.ceil(outputRows.length / CHUNK_SIZE);
-    for (let i = 0; i < outputRows.length; i += CHUNK_SIZE) {
-      const chunk = outputRows.slice(i, i + CHUNK_SIZE);
+    console.log('\nWriting to Google Sheets...');
+    const totalChunks = Math.ceil(allRows.length / CHUNK_SIZE);
+    for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
+      const chunk = allRows.slice(i, i + CHUNK_SIZE);
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `${TAB_NAME}!A${i + 2}`,
         valueInputOption: 'RAW',
         requestBody: { values: chunk },
       });
-      const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
-      console.log(`  Chunk ${chunkNum}/${totalChunks}: rows ${i + 1}–${Math.min(i + CHUNK_SIZE, outputRows.length)}`);
+      const n = Math.floor(i / CHUNK_SIZE) + 1;
+      console.log(`  Chunk ${n}/${totalChunks}: rows ${i + 1}–${Math.min(i + CHUNK_SIZE, allRows.length)}`);
     }
 
-    // Write Dupe Check formula — auto-expands to cover all rows including future appends
+    // Write Dupe Check formula — ARRAYFORMULA auto-expands for future appends
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${TAB_NAME}!L1`,
@@ -156,9 +181,27 @@ async function main() {
       requestBody: { values: [['=ARRAYFORMULA({"Dupe Check";A2:A&" "&D2:D})']] },
     });
 
-    console.log(`  Dupe Check formula written to L1`);
+    console.log(`\nDone — full history written (${allRows.length} rows)`);
+
   } else {
-    // Weekly run — append rows below existing data
+    // ── Weekly append: last 8 days only ────────────────────────────────────
+    const startDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    console.log(`Weekly run — appending from ${startDate.toISOString().slice(0, 10)} to today`);
+
+    const report = await runReport(spClient, {
+      reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+      marketplaceIds: MARKETPLACE_IDS,
+      dataStartTime: startDate,
+      dataEndTime: new Date(),
+    });
+
+    const outputRows = parseTsv(report.rawText)
+      .filter(r => r['order-status'] !== 'Cancelled')
+      .map(toOutputRow);
+
+    outputRows.sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
+    console.log(`  ${outputRows.length} rows to append`);
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${TAB_NAME}!A1`,
@@ -166,10 +209,10 @@ async function main() {
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: outputRows },
     });
-    console.log(`  Appended ${outputRows.length} rows`);
+
+    console.log(`  Done — ${outputRows.length} rows appended`);
   }
 
-  console.log(`\nDone — ${isFirstRun ? 'full history written' : 'weekly rows appended'}`);
   console.log('View: https://docs.google.com/spreadsheets/d/1UuXQykzKLoaiu67CwbEJyQmPbLgscBHdpus-eH1ekRI/edit');
 }
 
