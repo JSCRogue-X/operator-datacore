@@ -130,7 +130,7 @@ async function main() {
 
   // Get tab name
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const sheetTitle = spreadsheet.data.sheets?.[0]?.properties?.title ?? 'Sheet1';
+  const sheetTitle = spreadsheet.data.sheets?.[0]?.properties?.title ?? 'IPI Data';
   console.log(`  Tab: "${sheetTitle}"`);
 
   // Check if headers are already in row 1
