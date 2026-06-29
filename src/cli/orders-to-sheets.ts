@@ -69,7 +69,7 @@ async function main() {
   const rows = parseTsv(report.rawText);
   console.log(`  ${rows.length} order lines fetched`);
 
-  const outputRows = rows.map(row => {
+  const outputRows = rows.filter(row => row['order-status'] !== 'Cancelled').map(row => {
     const countryCode = (row['ship-country'] ?? '').toUpperCase();
     return [
       row['purchase-date'] ?? '',
