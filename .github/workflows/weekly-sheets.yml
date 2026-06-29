@@ -52,3 +52,6 @@ jobs:
 
       - name: Script 3 — Account Health → Sheets
         run: npx tsx src/cli/account-health-to-sheets.ts
+
+      - name: Script 4 — All Orders (14 days) → Sheets
+        run: npx tsx src/cli/orders-to-sheets.ts
