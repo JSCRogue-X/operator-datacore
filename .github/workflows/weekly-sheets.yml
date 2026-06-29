@@ -1,0 +1,54 @@
+name: Weekly Sheets Update
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'  # Every Monday at 5am UTC (6am BST)
+  workflow_dispatch:        # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  update-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+      SP_API_REGION: eu
+      SP_API_MARKETPLACE_IDS: A1F83G8C2ARO7P
+      BACKFILL_MONTHS: '1'
+      REPORTING_CURRENCY: GBP
+      ROLLUP_TIMEZONE: Europe/London
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+      GOOGLE_SHEET_ID: 1G2wv13Tl5p2-4IfeTaEC8jFf54_GUn80c_HkZy-an04
+      IPI_SHEET_ID: 1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Script 1 — FBA Inventory → Sheets
+        run: npx tsx src/cli/fba-to-sheets.ts
+
+      - name: Script 2 — IPI Components → Sheets
+        run: npx tsx src/cli/ipi-components-to-sheets.ts
+
+      - name: Script 3 — Account Health → Sheets
+        run: npx tsx src/cli/account-health-to-sheets.ts
