@@ -12,7 +12,7 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID ?? '1G2wv13Tl5p2-4IfeTaEC8jFf
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
 const MARKETPLACES = [
-  { id: 'A1F83G8C2ARO7P', label: 'UK' },
+  { id: 'A1F83G8C2ARO7P', label: 'GB' },
   { id: 'A1PA6795UKMFR9', label: 'DE' },
 ];
 
