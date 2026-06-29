@@ -80,6 +80,7 @@ async function main() {
     await wait70s();
 
     // FBA Inventory Planning report — FBA quantities + ASIN 5
+    const fbaBySkuMap = new Map<string, Record<string, string>>();
     try {
       const fbaReport = await runReport(spClient, {
         reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
@@ -87,39 +88,33 @@ async function main() {
       });
       const fbaRows = parseTsv(fbaReport.rawText);
       console.log(`  ${fbaRows.length} FBA inventory rows`);
-
       for (const fbaRow of fbaRows) {
         const sku = fbaRow['sku'] ?? '';
-        const listing = listingsBySku.get(sku) ?? {};
-
-        const available = parseInt(fbaRow['available'] ?? '0', 10) || 0;
-        const reserved = parseInt(fbaRow['Total Reserved Quantity'] ?? '0', 10) || 0;
-        const unfulfillable = parseInt(fbaRow['unfulfillable-quantity'] ?? '0', 10) || 0;
-        const totalQty = available + reserved + unfulfillable;
-
-        allRows.push([
-          sku,
-          listing['asin1'] ?? '',
-          market.code,
-          listing['status'] ?? '',
-          fbaRow['available'] ?? '',
-          String(totalQty),
-          fbaRow['Total Reserved Quantity'] ?? '',
-          fbaRow['asin'] ?? '',
-        ]);
+        if (sku) fbaBySkuMap.set(sku, fbaRow);
       }
     } catch (err) {
-      // FBA report unavailable — still write listing rows with blank FBA columns
-      console.warn(`  [${market.code}] FBA report failed (${(err as Error).message}) — writing listings only`);
-      for (const [sku, listing] of listingsBySku) {
-        allRows.push([
-          sku,
-          listing['asin1'] ?? '',
-          market.code,
-          listing['status'] ?? '',
-          '', '', '', '',
-        ]);
-      }
+      console.warn(`  [${market.code}] FBA report failed (${(err as Error).message}) — FBA columns will be blank`);
+    }
+
+    // Write one row per listing (all statuses: Active, Inactive, Incomplete)
+    // with FBA data joined where available
+    for (const [sku, listing] of listingsBySku) {
+      const fbaRow = fbaBySkuMap.get(sku) ?? {};
+      const available = parseInt(fbaRow['available'] ?? '0', 10) || 0;
+      const reserved = parseInt(fbaRow['Total Reserved Quantity'] ?? '0', 10) || 0;
+      const unfulfillable = parseInt(fbaRow['unfulfillable-quantity'] ?? '0', 10) || 0;
+      const totalQty = available + reserved + unfulfillable;
+
+      allRows.push([
+        sku,
+        listing['asin1'] ?? '',
+        market.code,
+        listing['status'] ?? '',
+        fbaRow['available'] ?? '',
+        totalQty > 0 ? String(totalQty) : '',
+        fbaRow['Total Reserved Quantity'] ?? '',
+        fbaRow['asin'] ?? '',
+      ]);
     }
 
     if (i < MARKETPLACES.length - 1) await wait70s();
