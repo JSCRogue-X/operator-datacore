@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-// First run: pulls history month by month from January 2025 (SP-API silently
-// returns 0 rows for ranges longer than ~30 days, so chunking is required).
-// Weekly runs: appends the last 8 days below existing data (no overwrite).
+// Pulls all Amazon orders from January 2025 to today, month by month (SP-API
+// returns 0 rows for ranges longer than ~30 days), aggregates into weekly
+// totals per SKU per marketplace, and overwrites the "Orders" tab each run.
 
 import 'dotenv/config';
 import { google } from 'googleapis';
@@ -13,7 +13,6 @@ const SPREADSHEET_ID = '1UuXQykzKLoaiu67CwbEJyQmPbLgscBHdpus-eH1ekRI';
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 const TAB_NAME = 'Orders';
 const HISTORY_START = new Date('2025-01-01T00:00:00Z');
-const CHUNK_SIZE = 10_000;
 
 const MARKETPLACE_IDS = [
   'A1F83G8C2ARO7P', // GB
@@ -27,7 +26,16 @@ const MARKETPLACE_IDS = [
   'A2NODRKZP88ZB9', // SE
 ];
 
-const HEADERS = ['amazon-order-id', 'purchase-date', 'sales-channel', 'sku', 'quantity'];
+const HEADERS = ['Week Start', 'Year', 'Week No.', 'Marketplace', 'SKU', 'Total Units'];
+
+interface AggRow {
+  weekStart: string;
+  year: number;
+  weekNo: number;
+  marketplace: string;
+  sku: string;
+  totalUnits: number;
+}
 
 function getMonthlyChunks(from: Date, to: Date): Array<{ start: Date; end: Date }> {
   const chunks: Array<{ start: Date; end: Date }> = [];
@@ -41,24 +49,33 @@ function getMonthlyChunks(from: Date, to: Date): Array<{ start: Date; end: Date 
   return chunks;
 }
 
+function getMondayOf(date: Date): Date {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dow = d.getUTCDay(); // 0=Sun, 1=Mon … 6=Sat
+  d.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));
+  return d;
+}
+
+function getISOWeek(monday: Date): { year: number; week: number } {
+  // ISO week: week 1 contains the first Thursday of the year
+  const thu = new Date(monday);
+  thu.setUTCDate(monday.getUTCDate() + 3); // Thursday of the same week
+  const year = thu.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const startOfW1 = getMondayOf(jan4);
+  const week = Math.round((monday.getTime() - startOfW1.getTime()) / (7 * 86400000)) + 1;
+  return { year, week };
+}
+
 async function wait70s() {
   console.log('  Waiting 70s (rate limit)...');
   await new Promise(r => setTimeout(r, 70_000));
 }
 
-function toOutputRow(row: Record<string, string>): string[] {
-  return [
-    row['amazon-order-id'] ?? '',
-    row['purchase-date'] ?? '',
-    row['sales-channel'] ?? '',
-    row['sku'] ?? '',
-    row['quantity'] ?? '',
-  ];
-}
-
 async function main() {
-  console.log('Orders History → Google Sheets');
-  console.log('-------------------------------');
+  console.log('Orders History → Google Sheets (aggregated weekly)');
+  console.log('---------------------------------------------------');
+  console.log(`Date range: ${HISTORY_START.toISOString().slice(0, 10)} → today`);
 
   const env = loadEnvForAmazon();
   const spClient = new SpApiClient({
@@ -68,19 +85,78 @@ async function main() {
     refreshToken: env.SP_API_REFRESH_TOKEN,
   });
 
+  // ── Step 1: fetch all months ──────────────────────────────────────────────
+  const now = new Date();
+  const months = getMonthlyChunks(HISTORY_START, now);
+  console.log(`\n${months.length} monthly chunks to fetch`);
+
+  const aggMap = new Map<string, AggRow>();
+
+  for (let i = 0; i < months.length; i++) {
+    const { start, end } = months[i]!;
+    const label = start.toISOString().slice(0, 7);
+    console.log(`\n[${i + 1}/${months.length}] ${label}`);
+
+    const report = await runReport(spClient, {
+      reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+      marketplaceIds: MARKETPLACE_IDS,
+      dataStartTime: start,
+      dataEndTime: end,
+    });
+
+    const rows = parseTsv(report.rawText).filter(r => r['order-status'] !== 'Cancelled');
+    console.log(`  ${rows.length} non-cancelled order lines`);
+
+    for (const row of rows) {
+      const purchaseDate = row['purchase-date'] ?? '';
+      if (!purchaseDate) continue;
+
+      const date = new Date(purchaseDate);
+      if (isNaN(date.getTime())) continue;
+
+      const monday = getMondayOf(date);
+      const weekStart = monday.toISOString().slice(0, 10);
+      const { year, week } = getISOWeek(monday);
+      const marketplace = row['sales-channel'] ?? '';
+      const sku = row['sku'] ?? '';
+      const qty = parseInt(row['quantity'] ?? '0', 10) || 0;
+
+      const key = `${weekStart}|${marketplace}|${sku}`;
+      const existing = aggMap.get(key);
+      if (existing) {
+        existing.totalUnits += qty;
+      } else {
+        aggMap.set(key, { weekStart, year, weekNo: week, marketplace, sku, totalUnits: qty });
+      }
+    }
+
+    if (i < months.length - 1) await wait70s();
+  }
+
+  // ── Step 2: sort and build output rows ───────────────────────────────────
+  const outputRows = [...aggMap.values()]
+    .sort((a, b) => {
+      if (a.weekStart !== b.weekStart) return a.weekStart.localeCompare(b.weekStart);
+      if (a.marketplace !== b.marketplace) return a.marketplace.localeCompare(b.marketplace);
+      return a.sku.localeCompare(b.sku);
+    })
+    .map(r => [r.weekStart, String(r.year), String(r.weekNo), r.marketplace, r.sku, String(r.totalUnits)]);
+
+  console.log(`\nAggregated into ${outputRows.length} rows (from ${aggMap.size} unique week/marketplace/SKU combinations)`);
+
+  // ── Step 3: write to Google Sheets ───────────────────────────────────────
+  console.log('\nWriting to Google Sheets...');
   const auth = new google.auth.GoogleAuth({
     keyFile: KEY_FILE,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Ensure the Orders tab exists
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
   const existingTab = spreadsheet.data.sheets?.find(s => s.properties?.title === TAB_NAME);
   let sheetId: number;
 
   if (!existingTab) {
-    console.log(`  Creating "${TAB_NAME}" tab...`);
     const addResp = await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: { requests: [{ addSheet: { properties: { title: TAB_NAME } } }] },
@@ -90,129 +166,33 @@ async function main() {
     sheetId = existingTab.properties?.sheetId ?? 0;
   }
 
-  // Detect first run by checking if B2 has data
-  const checkResp = await sheets.spreadsheets.values.get({
+  // Clear, resize, write
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${TAB_NAME}!B2`,
-  });
-  const isFirstRun = !checkResp.data.values?.[0]?.[0];
-
-  if (isFirstRun) {
-    // ── Initial backfill: fetch month by month ──────────────────────────────
-    console.log(`First run — pulling history month by month from ${HISTORY_START.toISOString().slice(0, 10)}`);
-
-    const now = new Date();
-    const months = getMonthlyChunks(HISTORY_START, now);
-    console.log(`  ${months.length} monthly chunks to fetch\n`);
-
-    const allRows: string[][] = [];
-
-    for (let i = 0; i < months.length; i++) {
-      const { start, end } = months[i]!;
-      const label = start.toISOString().slice(0, 7);
-      console.log(`[${i + 1}/${months.length}] ${label}`);
-
-      const report = await runReport(spClient, {
-        reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-        marketplaceIds: MARKETPLACE_IDS,
-        dataStartTime: start,
-        dataEndTime: end,
-      });
-
-      const rows = parseTsv(report.rawText)
-        .filter(r => r['order-status'] !== 'Cancelled')
-        .map(toOutputRow);
-
-      console.log(`  ${rows.length} rows`);
-      allRows.push(...rows);
-
-      if (i < months.length - 1) await wait70s();
-    }
-
-    allRows.sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
-    console.log(`\nTotal: ${allRows.length} rows across all months`);
-
-    // Clear, resize, write header
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: {
-        requests: [
-          { updateCells: { range: { sheetId }, fields: 'userEnteredValue' } },
-          {
-            updateSheetProperties: {
-              properties: {
-                sheetId,
-                gridProperties: { rowCount: allRows.length + 100, columnCount: 12 },
-              },
-              fields: 'gridProperties.rowCount,gridProperties.columnCount',
+    requestBody: {
+      requests: [
+        { updateCells: { range: { sheetId }, fields: 'userEnteredValue' } },
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties: { rowCount: outputRows.length + 10, columnCount: HEADERS.length },
             },
+            fields: 'gridProperties.rowCount,gridProperties.columnCount',
           },
-        ],
-      },
-    });
+        },
+      ],
+    },
+  });
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!A1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [HEADERS] },
-    });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${TAB_NAME}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [HEADERS, ...outputRows] },
+  });
 
-    // Write data in chunks of 10,000 rows
-    console.log('\nWriting to Google Sheets...');
-    const totalChunks = Math.ceil(allRows.length / CHUNK_SIZE);
-    for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
-      const chunk = allRows.slice(i, i + CHUNK_SIZE);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${TAB_NAME}!A${i + 2}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: chunk },
-      });
-      const n = Math.floor(i / CHUNK_SIZE) + 1;
-      console.log(`  Chunk ${n}/${totalChunks}: rows ${i + 1}–${Math.min(i + CHUNK_SIZE, allRows.length)}`);
-    }
-
-    // Write Dupe Check formula — ARRAYFORMULA auto-expands for future appends
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!L1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [['=ARRAYFORMULA({"Dupe Check";A2:A&" "&D2:D})']] },
-    });
-
-    console.log(`\nDone — full history written (${allRows.length} rows)`);
-
-  } else {
-    // ── Weekly append: last 8 days only ────────────────────────────────────
-    const startDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    console.log(`Weekly run — appending from ${startDate.toISOString().slice(0, 10)} to today`);
-
-    const report = await runReport(spClient, {
-      reportType: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-      marketplaceIds: MARKETPLACE_IDS,
-      dataStartTime: startDate,
-      dataEndTime: new Date(),
-    });
-
-    const outputRows = parseTsv(report.rawText)
-      .filter(r => r['order-status'] !== 'Cancelled')
-      .map(toOutputRow);
-
-    outputRows.sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
-    console.log(`  ${outputRows.length} rows to append`);
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!A1`,
-      valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: outputRows },
-    });
-
-    console.log(`  Done — ${outputRows.length} rows appended`);
-  }
-
+  console.log(`  Done — ${outputRows.length} rows written to "${TAB_NAME}"`);
   console.log('View: https://docs.google.com/spreadsheets/d/1UuXQykzKLoaiu67CwbEJyQmPbLgscBHdpus-eH1ekRI/edit');
 }
 
