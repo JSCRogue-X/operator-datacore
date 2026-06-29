@@ -11,7 +11,7 @@ permissions:
 jobs:
   update-sheets:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -55,3 +55,6 @@ jobs:
 
       - name: Script 4 — All Orders (14 days) → Sheets
         run: npx tsx src/cli/orders-to-sheets.ts
+
+      - name: Script 5 — Orders History → Sheets
+        run: npx tsx src/cli/orders-history-to-sheets.ts
