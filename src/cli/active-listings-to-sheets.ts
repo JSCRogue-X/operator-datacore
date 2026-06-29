@@ -60,50 +60,54 @@ async function main() {
     const market = MARKETPLACES[i]!;
     console.log(`\n[${market.code}] Fetching listings...`);
 
-    // All Listings report — SKU, ASIN, Status
-    const listingsReport = await runReport(spClient, {
-      reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
-      marketplaceIds: [market.id],
-    });
-    const listingsRows = parseTsv(listingsReport.rawText);
-    console.log(`  ${listingsRows.length} listings`);
+    try {
+      // All Listings report — SKU, ASIN, Status
+      const listingsReport = await runReport(spClient, {
+        reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
+        marketplaceIds: [market.id],
+      });
+      const listingsRows = parseTsv(listingsReport.rawText);
+      console.log(`  ${listingsRows.length} listings`);
 
-    // Build a map of SKU → listing data
-    const listingsBySku = new Map<string, Record<string, string>>();
-    for (const row of listingsRows) {
-      const sku = row['seller-sku'] ?? '';
-      if (sku) listingsBySku.set(sku, row);
-    }
+      // Build a map of SKU → listing data
+      const listingsBySku = new Map<string, Record<string, string>>();
+      for (const row of listingsRows) {
+        const sku = row['seller-sku'] ?? '';
+        if (sku) listingsBySku.set(sku, row);
+      }
 
-    await wait70s();
+      await wait70s();
 
-    // FBA Inventory Planning report — FBA quantities + ASIN 5
-    const fbaReport = await runReport(spClient, {
-      reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
-      marketplaceIds: [market.id],
-    });
-    const fbaRows = parseTsv(fbaReport.rawText);
-    console.log(`  ${fbaRows.length} FBA inventory rows`);
+      // FBA Inventory Planning report — FBA quantities + ASIN 5
+      const fbaReport = await runReport(spClient, {
+        reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
+        marketplaceIds: [market.id],
+      });
+      const fbaRows = parseTsv(fbaReport.rawText);
+      console.log(`  ${fbaRows.length} FBA inventory rows`);
 
-    for (const fbaRow of fbaRows) {
-      const sku = fbaRow['sku'] ?? '';
-      const listing = listingsBySku.get(sku) ?? {};
+      for (const fbaRow of fbaRows) {
+        const sku = fbaRow['sku'] ?? '';
+        const listing = listingsBySku.get(sku) ?? {};
 
-      const available = parseInt(fbaRow['available'] ?? '0', 10) || 0;
-      const reserved = parseInt(fbaRow['Total Reserved Quantity'] ?? '0', 10) || 0;
-      const unfulfillable = parseInt(fbaRow['unfulfillable-quantity'] ?? '0', 10) || 0;
-      const totalQty = available + reserved + unfulfillable;
+        const available = parseInt(fbaRow['available'] ?? '0', 10) || 0;
+        const reserved = parseInt(fbaRow['Total Reserved Quantity'] ?? '0', 10) || 0;
+        const unfulfillable = parseInt(fbaRow['unfulfillable-quantity'] ?? '0', 10) || 0;
+        const totalQty = available + reserved + unfulfillable;
 
-      allRows.push([
-        sku,
-        listing['asin1'] ?? '',
-        market.code,
-        listing['status'] ?? '',
-        fbaRow['available'] ?? '',
-        String(totalQty),
-        fbaRow['Total Reserved Quantity'] ?? '',
-        fbaRow['asin'] ?? '',
-      ]);
+        allRows.push([
+          sku,
+          listing['asin1'] ?? '',
+          market.code,
+          listing['status'] ?? '',
+          fbaRow['available'] ?? '',
+          String(totalQty),
+          fbaRow['Total Reserved Quantity'] ?? '',
+          fbaRow['asin'] ?? '',
+        ]);
+      }
+    } catch (err) {
+      console.warn(`  [${market.code}] Skipped — report failed: ${(err as Error).message}`);
     }
 
     if (i < MARKETPLACES.length - 1) await wait70s();
