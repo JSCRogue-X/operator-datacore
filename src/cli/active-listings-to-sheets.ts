@@ -60,25 +60,27 @@ async function main() {
     const market = MARKETPLACES[i]!;
     console.log(`\n[${market.code}] Fetching listings...`);
 
+    // All Listings report — SKU, ASIN, Status
+    let listingsBySku = new Map<string, Record<string, string>>();
     try {
-      // All Listings report — SKU, ASIN, Status
       const listingsReport = await runReport(spClient, {
         reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
         marketplaceIds: [market.id],
       });
       const listingsRows = parseTsv(listingsReport.rawText);
       console.log(`  ${listingsRows.length} listings`);
-
-      // Build a map of SKU → listing data
-      const listingsBySku = new Map<string, Record<string, string>>();
       for (const row of listingsRows) {
         const sku = row['seller-sku'] ?? '';
         if (sku) listingsBySku.set(sku, row);
       }
+    } catch (err) {
+      console.warn(`  [${market.code}] Listings report failed: ${(err as Error).message}`);
+    }
 
-      await wait70s();
+    await wait70s();
 
-      // FBA Inventory Planning report — FBA quantities + ASIN 5
+    // FBA Inventory Planning report — FBA quantities + ASIN 5
+    try {
       const fbaReport = await runReport(spClient, {
         reportType: 'GET_FBA_INVENTORY_PLANNING_DATA',
         marketplaceIds: [market.id],
@@ -107,7 +109,17 @@ async function main() {
         ]);
       }
     } catch (err) {
-      console.warn(`  [${market.code}] Skipped — report failed: ${(err as Error).message}`);
+      // FBA report unavailable — still write listing rows with blank FBA columns
+      console.warn(`  [${market.code}] FBA report failed (${(err as Error).message}) — writing listings only`);
+      for (const [sku, listing] of listingsBySku) {
+        allRows.push([
+          sku,
+          listing['asin1'] ?? '',
+          market.code,
+          listing['status'] ?? '',
+          '', '', '', '',
+        ]);
+      }
     }
 
     if (i < MARKETPLACES.length - 1) await wait70s();
