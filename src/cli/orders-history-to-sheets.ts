@@ -27,11 +27,14 @@ const MARKETPLACE_IDS = [
   'A2NODRKZP88ZB9', // SE
 ];
 
-const HEADERS = ['Week Start', 'Year', 'Week No.', 'Marketplace', 'SKU', 'Total Units'];
+const HEADERS = ['Week Start', 'Year', 'Month', 'Week No.', 'Marketplace', 'SKU', 'Total Units'];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 interface AggRow {
   weekStart: string;
   year: number;
+  month: string;
   weekNo: number;
   marketplace: string;
   sku: string;
@@ -121,6 +124,7 @@ async function main() {
       const monday = getMondayOf(date);
       const weekStart = monday.toISOString().slice(0, 10);
       const { year, week } = getISOWeek(monday);
+      const month = MONTH_NAMES[monday.getUTCMonth()]!;
       const marketplace = row['sales-channel'] ?? '';
       const sku = row['sku'] ?? '';
       const qty = parseInt(row['quantity'] ?? '0', 10) || 0;
@@ -130,7 +134,7 @@ async function main() {
       if (existing) {
         existing.totalUnits += qty;
       } else {
-        aggMap.set(key, { weekStart, year, weekNo: week, marketplace, sku, totalUnits: qty });
+        aggMap.set(key, { weekStart, year, month, weekNo: week, marketplace, sku, totalUnits: qty });
       }
     }
 
@@ -144,7 +148,7 @@ async function main() {
       if (a.marketplace !== b.marketplace) return a.marketplace.localeCompare(b.marketplace);
       return a.sku.localeCompare(b.sku);
     })
-    .map(r => [r.weekStart, String(r.year), String(r.weekNo), r.marketplace, r.sku, String(r.totalUnits)]);
+    .map(r => [r.weekStart, String(r.year), r.month, String(r.weekNo), r.marketplace, r.sku, String(r.totalUnits)]);
 
   console.log(`\nAggregated into ${outputRows.length} rows (from ${aggMap.size} unique week/marketplace/SKU combinations)`);
 
