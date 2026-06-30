@@ -34,7 +34,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -49,8 +49,8 @@ jobs:
           SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
           SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
           SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
-          SP_API_REGION: ${{ secrets.SP_API_REGION }}
-          SP_API_MARKETPLACE_IDS: ${{ secrets.SP_API_MARKETPLACE_IDS }}
+          SP_API_REGION: eu
+          SP_API_MARKETPLACE_IDS: A1F83G8C2ARO7P
         run: |
           MONTHS="${{ github.event.inputs.months || '1' }}"
           npm run backfill -- --source amazon --report sales-traffic --months "$MONTHS" --concurrency 2
@@ -64,7 +64,7 @@ jobs:
           SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
           SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
           SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
-          SP_API_REGION: ${{ secrets.SP_API_REGION }}
+          SP_API_REGION: eu
         run: |
           # pg_cron handles this on a 14:30 UTC schedule too, but a fresh roll
           # right after the sync gives the cleanest dashboard read.
