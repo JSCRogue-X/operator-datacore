@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 // Pulls all Amazon orders from January 2025 to today, month by month (SP-API
 // returns 0 rows for ranges longer than ~30 days), aggregates into weekly
-// totals per SKU per marketplace, and overwrites the "Orders" tab each run.
+// totals per SKU per marketplace, and overwrites the "Claude Amazon Sales"
+// tab each run.
 
 import 'dotenv/config';
 import { google } from 'googleapis';
@@ -9,9 +10,9 @@ import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
 import { runReport, parseTsv } from '../lib/sp-api/reports.js';
 
-const SPREADSHEET_ID = '1yQi3P7txLhihpB_hHgVfru64mx6KRk97TAhv6g4cYmM'; // TEST SHEET
+const SPREADSHEET_ID = '1mIk4mrFisXIpen2zZpnmxHWDRtmbjX6Ikyao_EzWZ3M'; // Master Amazon Sales sheet
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
-const TAB_NAME = 'Orders';
+const TAB_NAME = 'Claude Amazon Sales';
 const HISTORY_START = new Date('2025-01-01T00:00:00Z');
 
 const MARKETPLACE_IDS = [
@@ -196,7 +197,7 @@ async function main() {
   });
 
   console.log(`  Done — ${outputRows.length} rows written to "${TAB_NAME}"`);
-  console.log('View: https://docs.google.com/spreadsheets/d/1UuXQykzKLoaiu67CwbEJyQmPbLgscBHdpus-eH1ekRI/edit');
+  console.log(`View: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
