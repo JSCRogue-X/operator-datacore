@@ -104,8 +104,11 @@ async function main() {
       dataEndTime: end,
     });
 
-    const rows = parseTsv(report.rawText).filter(r => r['order-status'] !== 'Cancelled');
-    console.log(`  ${rows.length} non-cancelled order lines`);
+    const rows = parseTsv(report.rawText).filter(r =>
+      r['order-status'] !== 'Cancelled' &&
+      !(r['sales-channel'] ?? '').toLowerCase().startsWith('non-amazon'),
+    );
+    console.log(`  ${rows.length} non-cancelled, Amazon-channel order lines`);
 
     for (const row of rows) {
       const purchaseDate = row['purchase-date'] ?? '';
