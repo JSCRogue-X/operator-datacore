@@ -55,6 +55,10 @@ async function main() {
   });
 
   const allRows: string[][] = [];
+  // PAN-EU: IE, NL, BE share DE's warehouse stock, so their FBA total
+  // quantity should mirror DE's figure rather than their own (often blank).
+  const PAN_EU_COPY_FROM_DE = new Set(['IE', 'NL', 'BE']);
+  const deTotalQtyBySku = new Map<string, number>();
 
   for (let i = 0; i < MARKETPLACES.length; i++) {
     const market = MARKETPLACES[i]!;
@@ -103,7 +107,13 @@ async function main() {
       const available = parseInt(fbaRow['available'] ?? '0', 10) || 0;
       const reserved = parseInt(fbaRow['Total Reserved Quantity'] ?? '0', 10) || 0;
       const unfulfillable = parseInt(fbaRow['unfulfillable-quantity'] ?? '0', 10) || 0;
-      const totalQty = available + reserved + unfulfillable;
+      let totalQty = available + reserved + unfulfillable;
+
+      if (market.code === 'DE') {
+        deTotalQtyBySku.set(sku, totalQty);
+      } else if (PAN_EU_COPY_FROM_DE.has(market.code)) {
+        totalQty = deTotalQtyBySku.get(sku) ?? totalQty;
+      }
 
       allRows.push([
         sku,
