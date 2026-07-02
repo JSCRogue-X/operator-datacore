@@ -86,7 +86,7 @@ async function main() {
   });
 
   // Sort by Order Date & Time ascending (earliest first)
-  outputRows.sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
+  outputRows.sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')));
 
   console.log('\nStep 2: Writing to Google Sheets...');
   const auth = new google.auth.GoogleAuth({
