@@ -148,7 +148,7 @@ async function main() {
       if (a.marketplace !== b.marketplace) return a.marketplace.localeCompare(b.marketplace);
       return a.sku.localeCompare(b.sku);
     })
-    .map(r => [r.weekStart, String(r.year), r.month, String(r.weekNo), r.marketplace, r.sku, String(r.totalUnits)]);
+    .map(r => [r.weekStart, String(r.year), r.month, String(r.weekNo), r.marketplace, r.sku, r.totalUnits]);
 
   console.log(`\nAggregated into ${outputRows.length} rows (from ${aggMap.size} unique week/marketplace/SKU combinations)`);
 
