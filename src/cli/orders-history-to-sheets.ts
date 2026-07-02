@@ -123,7 +123,8 @@ async function main() {
 
       const monday = getMondayOf(date);
       const weekStart = monday.toISOString().slice(0, 10);
-      const { year, week } = getISOWeek(monday);
+      const { week } = getISOWeek(monday);
+      const year = monday.getUTCFullYear();
       const month = MONTH_NAMES[monday.getUTCMonth()]!;
       const marketplace = row['sales-channel'] ?? '';
       const sku = row['sku'] ?? '';
