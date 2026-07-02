@@ -79,8 +79,8 @@ async function main() {
       COUNTRY_NAMES[countryCode] ?? countryCode,
       row['currency'] ?? '',
       row['fulfillment-channel'] ?? '',
-      row['quantity'] ?? '',
-      row['item-price'] ?? '',
+      parseInt(row['quantity'] ?? '0', 10) || 0,
+      parseFloat(row['item-price'] ?? '0') || 0,
       row['sales-channel'] ?? '',
     ];
   });
@@ -137,6 +137,31 @@ async function main() {
     valueInputOption: 'RAW',
     requestBody: { values: [HEADERS, ...outputRows] },
   });
+
+  // Apply number formatting: H = integer (0dp), I = 2dp
+  if (outputRows.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 1, endRowIndex: outputRows.length + 1, startColumnIndex: 7, endColumnIndex: 8 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 1, endRowIndex: outputRows.length + 1, startColumnIndex: 8, endColumnIndex: 9 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          },
+        ],
+      },
+    });
+  }
 
   console.log(`  Done — ${outputRows.length} rows written to "${TAB_NAME}"`);
   console.log('\nView: https://docs.google.com/spreadsheets/d/1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4/edit');
