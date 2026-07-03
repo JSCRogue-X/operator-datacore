@@ -69,6 +69,11 @@ function getISOWeek(monday: Date): { year: number; week: number } {
   return { year, week };
 }
 
+// Convert a JS Date to a Google Sheets serial date number (days since 30 Dec 1899)
+function toSheetDate(d: Date): number {
+  return Math.floor(d.getTime() / 86400000) + 25569;
+}
+
 async function wait70s() {
   console.log('  Waiting 70s (rate limit)...');
   await new Promise(r => setTimeout(r, 70_000));
@@ -147,7 +152,7 @@ async function main() {
       if (a.marketplace !== b.marketplace) return a.marketplace.localeCompare(b.marketplace);
       return a.asin.localeCompare(b.asin);
     })
-    .map(r => [r.weekStart, r.year, r.month, String(r.weekNo), r.marketplace, r.asin, r.totalUnits]);
+    .map(r => [toSheetDate(new Date(r.weekStart + 'T00:00:00Z')), r.year, r.month, String(r.weekNo), r.marketplace, r.asin, r.totalUnits]);
 
   console.log(`\nAggregated into ${outputRows.length} rows (from ${aggMap.size} unique week/marketplace/ASIN combinations)`);
 
@@ -197,6 +202,20 @@ async function main() {
     range: `${TAB_NAME}!A1`,
     valueInputOption: 'RAW',
     requestBody: { values: [HEADERS, ...outputRows] },
+  });
+
+  // Apply dd-mm-yyyy date format to Week Start column (skip header row)
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{
+        repeatCell: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: outputRows.length + 1, startColumnIndex: 0, endColumnIndex: 1 },
+          cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd-mm-yyyy' } } },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      }],
+    },
   });
 
   console.log(`  Done — ${outputRows.length} rows written to "${TAB_NAME}"`);
