@@ -58,7 +58,7 @@ async function main() {
 
   console.log('Fetching Removal Order Detail report...');
   const report = await runReport(spClient, {
-    reportType: 'GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAILS_DATA',
+    reportType: 'GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAIL_DATA',
     marketplaceIds: MARKETPLACE_IDS,
   });
 
