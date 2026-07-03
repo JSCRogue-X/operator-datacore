@@ -24,6 +24,14 @@ const MARKETPLACE_IDS = [
   'A2NODRKZP88ZB9', // SE
 ];
 
+// Google Sheets date serial: days since 30 Dec 1899
+const SHEETS_EPOCH = new Date(Date.UTC(1899, 11, 30)).getTime();
+function toSheetDate(dateStr: string): number | string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return Math.round((d.getTime() - SHEETS_EPOCH) / 86400000);
+}
+
 const HEADERS = [
   'Request Date',
   'Order ID',
@@ -64,7 +72,7 @@ async function main() {
   console.log(`  ${filtered.length} rows after filtering (Completed, disposed > 0)`);
 
   const outputRows = filtered.map(row => [
-    row['request-date'] ?? '',
+    toSheetDate(row['request-date'] ?? ''),
     row['order-id'] ?? '',
     row['order-status'] ?? '',
     row['sku'] ?? '',
@@ -124,6 +132,22 @@ async function main() {
     valueInputOption: 'RAW',
     requestBody: { values: [HEADERS, ...outputRows] },
   });
+
+  // Apply date formatting to Request Date column (A)
+  if (outputRows.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [{
+          repeatCell: {
+            range: { sheetId, startRowIndex: 1, endRowIndex: outputRows.length + 1, startColumnIndex: 0, endColumnIndex: 1 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        }],
+      },
+    });
+  }
 
   console.log(`  Done — ${outputRows.length} rows written to "${TAB_NAME}"`);
   console.log('\nView: https://docs.google.com/spreadsheets/d/1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4/edit');
