@@ -57,8 +57,8 @@ async function main() {
   });
 
   console.log('Fetching Removal Order Detail report...');
-  const dataStartTime = new Date('2025-01-01T00:00:00Z');
   const dataEndTime = new Date();
+  const dataStartTime = new Date(dataEndTime.getTime() - 30 * 24 * 60 * 60 * 1000);
   const report = await runReport(spClient, {
     reportType: 'GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAIL_DATA',
     marketplaceIds: MARKETPLACE_IDS,
