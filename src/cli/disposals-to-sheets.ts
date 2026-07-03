@@ -57,7 +57,13 @@ async function main() {
   const rows = parseTsv(report.rawText);
   console.log(`  ${rows.length} removal order rows fetched`);
 
-  const outputRows = rows.map(row => [
+  const filtered = rows.filter(row =>
+    (row['order-status'] ?? '').toLowerCase() === 'completed' &&
+    (parseInt(row['disposed-quantity'] ?? '0', 10) || 0) > 0,
+  );
+  console.log(`  ${filtered.length} rows after filtering (Completed, disposed > 0)`);
+
+  const outputRows = filtered.map(row => [
     row['request-date'] ?? '',
     row['order-id'] ?? '',
     row['order-status'] ?? '',
