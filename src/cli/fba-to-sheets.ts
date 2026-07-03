@@ -9,11 +9,7 @@ import { SpApiClient } from '../lib/sp-api/client.js';
 import { runReport, parseTsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID ?? '1G2wv13Tl5p2-4IfeTaEC8jFf54_GUn80c_HkZy-an04';
-const AUTOMATIONS_SHEET_ID = process.env.IPI_SHEET_ID ?? '1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4';
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
-
-const LINKING_TAB = 'Linking';
-const LINKING_HEADERS = ['SKU', 'FNSKU', 'ASIN', 'Product Name', 'Condition', 'Price', 'Marketplace Country Code'];
 
 const MARKETPLACES = [
   { id: 'A1F83G8C2ARO7P', label: 'GB' },
@@ -70,7 +66,6 @@ async function main() {
   console.log('Step 1: Downloading Manage FBA Inventory reports from Amazon...');
 
   const allRows: string[][] = [];
-  const linkingRows: (string | number)[][] = [];
 
   for (const market of MARKETPLACES) {
     console.log(`  Requesting ${market.label} report...`);
@@ -83,15 +78,6 @@ async function main() {
     for (const row of rows) {
       row['marketplace'] = market.label;
       allRows.push(COLUMN_ORDER.map(col => row[col] ?? ''));
-      linkingRows.push([
-        row['sku'] ?? '',
-        row['fnsku'] ?? '',
-        row['asin'] ?? '',
-        row['product-name'] ?? '',
-        row['condition'] ?? '',
-        parseFloat(row['your-price'] ?? '') || '',
-        market.label,
-      ]);
     }
 
     console.log(`    ${rows.length} rows (${Object.keys(rows[0] ?? {}).length} columns)`);
@@ -148,50 +134,6 @@ async function main() {
   });
 
   console.log(`  Done — ${allRows.length} rows written to Google Sheet`);
-
-  // 3. Write Linking tab to Automations sheet
-  console.log(`Step 3: Writing "${LINKING_TAB}" tab to Automations sheet...`);
-  const autoSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: AUTOMATIONS_SHEET_ID });
-  const existingLinking = autoSpreadsheet.data.sheets?.find(s => s.properties?.title === LINKING_TAB);
-  let linkingSheetId: number;
-
-  if (!existingLinking) {
-    console.log(`  Creating "${LINKING_TAB}" tab...`);
-    const addResp = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: AUTOMATIONS_SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: LINKING_TAB } } }] },
-    });
-    linkingSheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
-  } else {
-    linkingSheetId = existingLinking.properties?.sheetId ?? 0;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: AUTOMATIONS_SHEET_ID,
-    requestBody: {
-      requests: [
-        { updateCells: { range: { sheetId: linkingSheetId }, fields: 'userEnteredValue' } },
-        {
-          updateSheetProperties: {
-            properties: {
-              sheetId: linkingSheetId,
-              gridProperties: { rowCount: linkingRows.length + 10, columnCount: LINKING_HEADERS.length },
-            },
-            fields: 'gridProperties.rowCount,gridProperties.columnCount',
-          },
-        },
-      ],
-    },
-  });
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: AUTOMATIONS_SHEET_ID,
-    range: `${LINKING_TAB}!A1`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [LINKING_HEADERS, ...linkingRows] },
-  });
-
-  console.log(`  Done — ${linkingRows.length} rows written to "${LINKING_TAB}"`);
   console.log('');
   console.log('View your sheet: https://docs.google.com/spreadsheets/d/1G2wv13Tl5p2-4IfeTaEC8jFf54_GUn80c_HkZy-an04/edit');
 }
