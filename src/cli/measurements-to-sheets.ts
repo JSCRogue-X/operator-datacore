@@ -44,23 +44,23 @@ const HEADERS = [
 // Map display headers to TSV column names from the report
 const TSV_COLUMNS = [
   'asin',
-  'product-name',
-  'fulfillment-center',
-  'country-code',
-  'longest-side',
-  'median-side',
-  'shortest-side',
-  'measurement-units',
+  'product_name',
+  'fulfillment_center',
+  'country_code',
+  'longest_side',
+  'median_side',
+  'shortest_side',
+  'measurement_units',
   'weight',
-  'weight-units',
-  'item-volume',
-  'volume-units',
-  'product-size-tier',
-  'clean-title',
+  'weight_units',
+  'item_volume',
+  'volume_units',
+  'product_size_tier',
+  'clean_title',  // not present in this report — column will be blank
 ];
 
 // Columns that should be written as numbers
-const NUMERIC_COLS = new Set(['longest-side', 'median-side', 'shortest-side', 'weight', 'item-volume']);
+const NUMERIC_COLS = new Set(['longest_side', 'median_side', 'shortest_side', 'weight', 'item_volume']);
 
 function parseVal(col: string, val: string): string | number {
   if (NUMERIC_COLS.has(col)) return parseFloat(val) || 0;
