@@ -83,7 +83,7 @@ async function main() {
   const results = await Promise.allSettled(
     MARKETPLACES.map(async (m) => {
       const report = await runReport(spClient, {
-        reportType: 'GET_V1_SELLER_PERFORMANCE_REPORT',
+        reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
       return { label: m.label, metrics: parseHealthXml(report.rawText) };
