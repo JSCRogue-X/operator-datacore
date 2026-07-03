@@ -1,4 +1,5 @@
 import pRetry, { AbortError } from 'p-retry';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { getLwaAccessToken } from './auth.js';
 import { SP_API_ENDPOINTS, SpApiRegion } from './endpoints.js';
 
@@ -47,10 +48,15 @@ export class SpApiClient {
         minTimeout: 1_000,
         factor: 2,
         maxTimeout: 30_000,
-        onFailedAttempt: (err) => {
+        onFailedAttempt: async (err) => {
           if (err instanceof SpApiError && err.status >= 400 && err.status < 500 && err.status !== 429) {
             // Permanent client errors (auth, malformed) — don't retry.
             throw new AbortError(err.message);
+          }
+          if (err instanceof SpApiError && err.status === 429) {
+            // Reports API restores at 1 req/60s — wait 65s extra on top of backoff.
+            console.log(`  [429] Rate limited on ${req.path} — waiting 65s before retry ${err.attemptNumber + 1}...`);
+            await sleep(65_000);
           }
         },
       },
