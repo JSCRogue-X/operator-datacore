@@ -55,3 +55,6 @@ jobs:
 
       - name: Script 4 — All Orders (14 days) → Sheets
         run: npx tsx src/cli/orders-to-sheets.ts
+
+      - name: Script 5 — Disposals → Sheets
+        run: npx tsx src/cli/disposals-to-sheets.ts
