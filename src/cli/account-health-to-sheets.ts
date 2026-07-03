@@ -32,36 +32,35 @@ interface HealthMetrics {
   returnDissatisfactionRate: string;
 }
 
-function statusScore(status: string): string {
-  if (status === 'Good') return '1000';
-  if (status === 'Fair') return '500';
-  if (status === 'Poor') return '0';
-  return 'N/A';
-}
 
-function parseHealthXml(xml: string): HealthMetrics {
-  // Extract overall status from the performanceChecklist
-  const checklist = xml.match(/<performanceChecklist>([\s\S]*?)<\/performanceChecklist>/)?.[1] ?? '';
-  const statuses = [...checklist.matchAll(/<status>([\s\S]*?)<\/status>/g)].map(m => m[1]!.trim());
-  const overallStatus = statuses.includes('Poor') ? 'Poor'
-    : statuses.includes('Fair') ? 'Fair'
-    : statuses.length > 0 ? 'Good' : 'N/A';
-  const overall = statusScore(overallStatus);
+function parseHealthJson(raw: string): HealthMetrics {
+  try {
+    const data = JSON.parse(raw);
 
-  // Helper: extract rate from the LAST occurrence of a metrics block/field
-  const getLastRate = (blockTag: string, rateTag: string): string => {
-    const blocks = [...xml.matchAll(new RegExp(`<${blockTag}>([\\s\\S]*?)<\\/${blockTag}>`, 'g'))];
-    const last = blocks[blocks.length - 1]?.[1] ?? '';
-    return last.match(new RegExp(`<${rateTag}>[\\s\\S]*?<rate>([\\s\\S]*?)<\\/rate>`))?.[1]?.trim() ?? 'N/A';
-  };
+    // Overall account status
+    const accountStatus = (data.accountStatuses?.[0]?.status ?? '').toUpperCase();
+    const overall = accountStatus === 'NORMAL' ? '1000'
+      : accountStatus === 'AT_RISK' ? '500'
+      : accountStatus === 'CRITICAL' ? '0'
+      : 'N/A';
 
-  return {
-    overall,
-    odrRate: getLastRate('orderDefectMetrics', 'orderWithDefects'),
-    lateShipmentRate: getLastRate('customerExperienceMetrics', 'lateShipment'),
-    cancellationRate: getLastRate('customerExperienceMetrics', 'preFulfillmentCancellation'),
-    returnDissatisfactionRate: getLastRate('returnDissatisfactionMetrics', 'returnDissatisfaction'),
-  };
+    const metrics = data.performanceMetrics?.[0] ?? {};
+
+    const getRate = (key: string): string => {
+      const val = metrics[key]?.rate;
+      return (val !== undefined && val !== null) ? String(val) : 'N/A';
+    };
+
+    return {
+      overall,
+      odrRate: getRate('orderDefectRate'),
+      lateShipmentRate: getRate('lateShipmentRate'),
+      cancellationRate: getRate('preFulfillmentCancellationRate'),
+      returnDissatisfactionRate: getRate('returnDissatisfactionRate'),
+    };
+  } catch {
+    return { overall: 'N/A', odrRate: 'N/A', lateShipmentRate: 'N/A', cancellationRate: 'N/A', returnDissatisfactionRate: 'N/A' };
+  }
 }
 
 async function main() {
@@ -88,9 +87,8 @@ async function main() {
         reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
-      // Log first 1000 chars so we can see the V2 format and fix parsing if needed
-      if (i === 0) console.log(`  [${m.label}] V2 raw sample:\n${report.rawText.slice(0, 1000)}\n`);
-      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthXml(report.rawText) } });
+      if (i === 0) console.log(`  [${m.label}] V2 raw sample:\n${report.rawText.slice(0, 2000)}\n`);
+      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText) } });
     } catch (err) {
       results.push({ status: 'rejected', reason: err });
     }
