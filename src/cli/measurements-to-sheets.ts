@@ -38,7 +38,6 @@ const HEADERS = [
   'Item Volume',
   'Volume Units',
   'Product Size Tier',
-  'Clean Title',
 ];
 
 // Map display headers to TSV column names from the report
@@ -56,7 +55,6 @@ const TSV_COLUMNS = [
   'item_volume',
   'volume_units',
   'product_size_tier',
-  'clean_title',  // not present in this report — column will be blank
 ];
 
 // Columns that should be written as numbers
