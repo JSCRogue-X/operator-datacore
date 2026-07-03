@@ -65,3 +65,9 @@ jobs:
       - name: Script 5 — Linking → Sheets
         run: npx tsx src/cli/linking-to-sheets.ts
 
+      - name: Wait for SP-API rate limit recovery
+        run: sleep 60
+
+      - name: Script 6 — Measurements → Sheets
+        run: npx tsx src/cli/measurements-to-sheets.ts
+
