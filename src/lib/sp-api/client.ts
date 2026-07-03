@@ -44,7 +44,7 @@ export class SpApiClient {
     return pRetry(
       async () => this.requestOnce<T>(req),
       {
-        retries: 5,
+        retries: 10,
         minTimeout: 1_000,
         factor: 2,
         maxTimeout: 30_000,
