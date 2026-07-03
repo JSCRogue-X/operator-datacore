@@ -51,9 +51,13 @@ function parseHealthJson(raw: string): HealthMetrics {
       return (val !== undefined && val !== null) ? String(val) : 'N/A';
     };
 
+    // orderDefectRate nests as { afn: { rate }, mfn: { rate } } in V2 — not a direct .rate
+    const odrField = metrics['orderDefectRate'];
+    const odrVal = odrField?.rate ?? odrField?.afn?.rate;
+
     return {
       overall,
-      odrRate: getRate('orderDefectRate'),
+      odrRate: (odrVal !== undefined && odrVal !== null) ? String(odrVal) : 'N/A',
       lateShipmentRate: getRate('lateShipmentRate'),
       cancellationRate: getRate('preFulfillmentCancellationRate'),
       returnDissatisfactionRate: getRate('returnDissatisfactionRate'),
@@ -87,7 +91,6 @@ async function main() {
         reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
-      if (i === 0) console.log(`  [${m.label}] V2 raw sample:\n${report.rawText.slice(0, 2000)}\n`);
       results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText) } });
     } catch (err) {
       results.push({ status: 'rejected', reason: err });
