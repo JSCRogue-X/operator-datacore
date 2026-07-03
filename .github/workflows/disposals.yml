@@ -1,0 +1,39 @@
+name: Disposals Update
+
+on:
+  schedule:
+    - cron: '30 6 * * 1'  # Every Monday at 6:30am UTC (well after weekly-sheets at 5am)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+      SP_API_REGION: eu
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+      IPI_SHEET_ID: 1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Disposals → Sheets
+        run: npx tsx src/cli/disposals-to-sheets.ts
