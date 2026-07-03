@@ -78,17 +78,27 @@ async function main() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  console.log(`Step 1: Fetching health reports for all ${MARKETPLACES.length} marketplaces in parallel...`);
+  console.log(`Step 1: Fetching health reports for all ${MARKETPLACES.length} marketplaces sequentially...`);
 
-  const results = await Promise.allSettled(
-    MARKETPLACES.map(async (m) => {
+  const results: PromiseSettledResult<{ label: string; metrics: HealthMetrics }>[] = [];
+  for (let i = 0; i < MARKETPLACES.length; i++) {
+    const m = MARKETPLACES[i]!;
+    try {
       const report = await runReport(spClient, {
         reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
-      return { label: m.label, metrics: parseHealthXml(report.rawText) };
-    }),
-  );
+      // Log first 1000 chars so we can see the V2 format and fix parsing if needed
+      if (i === 0) console.log(`  [${m.label}] V2 raw sample:\n${report.rawText.slice(0, 1000)}\n`);
+      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthXml(report.rawText) } });
+    } catch (err) {
+      results.push({ status: 'rejected', reason: err });
+    }
+    if (i < MARKETPLACES.length - 1) {
+      console.log('  Waiting 15s before next marketplace...');
+      await new Promise(r => setTimeout(r, 15_000));
+    }
+  }
 
   const metricsMap: Record<string, HealthMetrics | null> = {};
   for (let i = 0; i < MARKETPLACES.length; i++) {
