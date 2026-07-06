@@ -91,6 +91,7 @@ async function main() {
         reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
+      if (i === 0) console.log(`  [${m.label}] Full V2 JSON:\n${report.rawText}\n`);
       results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText) } });
     } catch (err) {
       results.push({ status: 'rejected', reason: err });
