@@ -1,6 +1,9 @@
 #!/usr/bin/env tsx
-// Fetches Amazon Account Health for all EU marketplaces via GET_V1_SELLER_PERFORMANCE_REPORT
-// and appends a weekly snapshot row (one column per marketplace) to the "Account Health" tab.
+// Fetches Amazon Account Health for all EU marketplaces and appends a weekly
+// snapshot row (one column per marketplace) to the "Account Health" tab.
+// AHR scores come from /accountHealth/2024-04-01/accountHealthRating (requires
+// the "Account Health" SP-API role granted in Seller Central → Apps & Services).
+// Performance metrics (ODR, late shipment, etc.) come from GET_V2_SELLER_PERFORMANCE_REPORT.
 
 import 'dotenv/config';
 import { google } from 'googleapis';
@@ -32,17 +35,40 @@ interface HealthMetrics {
   returnDissatisfactionRate: string;
 }
 
+// Fetches the real Account Health Rating score (0–1000) for one marketplace.
+// Requires the "Account Health" SP-API role in Seller Central → Apps & Services → Develop Apps.
+// Returns null if the role is not granted (403) or the call fails for any reason.
+async function fetchAhrScore(spClient: SpApiClient, marketplaceId: string): Promise<number | null> {
+  try {
+    const res = await spClient.request<Record<string, unknown>>({
+      method: 'GET',
+      path: '/accountHealth/2024-04-01/accountHealthRating',
+      query: { marketplaceIds: marketplaceId },
+    });
+    const p = res.payload as Record<string, unknown>;
+    const rating = (p?.accountHealthRating ?? p) as Record<string, unknown>;
+    const score = rating?.score ?? rating?.value ?? rating?.ahrScore;
+    return typeof score === 'number' ? score : null;
+  } catch {
+    return null;
+  }
+}
 
-function parseHealthJson(raw: string): HealthMetrics {
+function parseHealthJson(raw: string, ahrScore: number | null): HealthMetrics {
   try {
     const data = JSON.parse(raw);
 
-    // Overall account status
-    const accountStatus = (data.accountStatuses?.[0]?.status ?? '').toUpperCase();
-    const overall = accountStatus === 'NORMAL' ? '1000'
-      : accountStatus === 'AT_RISK' ? '500'
-      : accountStatus === 'CRITICAL' ? '0'
-      : 'N/A';
+    // Use real AHR score when available; fall back to status-based approximation otherwise
+    let overall: string;
+    if (ahrScore !== null) {
+      overall = String(ahrScore);
+    } else {
+      const accountStatus = (data.accountStatuses?.[0]?.status ?? '').toUpperCase();
+      overall = accountStatus === 'NORMAL' ? '1000'
+        : accountStatus === 'AT_RISK' ? '500'
+        : accountStatus === 'CRITICAL' ? '0'
+        : 'N/A';
+    }
 
     const metrics = data.performanceMetrics?.[0] ?? {};
 
@@ -84,15 +110,24 @@ async function main() {
   console.log(`Step 1: Fetching health reports for all ${MARKETPLACES.length} marketplaces sequentially...`);
 
   const results: PromiseSettledResult<{ label: string; metrics: HealthMetrics }>[] = [];
+  let loggedAhrMissing = false;
   for (let i = 0; i < MARKETPLACES.length; i++) {
     const m = MARKETPLACES[i]!;
+
+    // Fetch real AHR score (0–1000) from the Account Health API
+    const ahrScore = await fetchAhrScore(spClient, m.id);
+    if (ahrScore === null && !loggedAhrMissing) {
+      loggedAhrMissing = true;
+      console.log('  [AHR] Real scores unavailable — grant the "Account Health" role in');
+      console.log('  Seller Central → Apps & Services → Develop Apps, then scores will auto-populate.');
+    }
+
     try {
       const report = await runReport(spClient, {
         reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
         marketplaceIds: [m.id],
       });
-      if (i === 0) console.log(`  [${m.label}] Full V2 JSON:\n${report.rawText}\n`);
-      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText) } });
+      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText, ahrScore) } });
     } catch (err) {
       results.push({ status: 'rejected', reason: err });
     }
