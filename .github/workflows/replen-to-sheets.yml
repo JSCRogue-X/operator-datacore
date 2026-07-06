@@ -1,0 +1,38 @@
+name: FBA Replen → Sheets
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'  # Every Monday at 10am UTC (11am BST)
+  workflow_dispatch:        # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  replen-to-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+      SP_API_REGION: eu
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: FBA Replen → Sheets
+        run: npx tsx src/cli/replen-to-sheets.ts
