@@ -50,6 +50,46 @@ const COLUMN_ORDER = [
   'Total Days of Supply (including units from open shipments)',
 ];
 
+const NUMERIC_COLS = new Set([
+  'available', 'pending-removal-quantity',
+  'inv-age-0-to-90-days', 'inv-age-91-to-180-days', 'inv-age-181-to-270-days',
+  'inv-age-271-to-365-days', 'inv-age-365-plus-days',
+  'units-shipped-t7', 'units-shipped-t30', 'units-shipped-t60', 'units-shipped-t90',
+  'your-price', 'sales-price', 'lowest-price-new-plus-shipping', 'lowest-price-used',
+  'healthy-inventory-level', 'recommended-sales-price', 'recommended-sale-duration-days',
+  'recommended-removal-quantity', 'estimated-cost-savings-of-recommended-actions',
+  'sell-through', 'item-volume', 'storage-volume', 'sales-rank', 'days-of-supply',
+  'estimated-excess-quantity', 'weeks-of-cover-t30', 'weeks-of-cover-t90',
+  'featuredoffer-price',
+  'sales-shipped-last-7-days', 'sales-shipped-last-30-days',
+  'sales-shipped-last-60-days', 'sales-shipped-last-90-days',
+  'inv-age-0-to-30-days', 'inv-age-31-to-60-days', 'inv-age-61-to-90-days',
+  'inv-age-181-to-330-days', 'inv-age-331-to-365-days',
+  'estimated-storage-cost-next-month',
+  'inbound-quantity', 'inbound-working', 'inbound-shipped', 'inbound-received',
+  'Total Reserved Quantity', 'unfulfillable-quantity',
+  'quantity-to-be-charged-ais-241-270-days', 'estimated-ais-241-270-days',
+  'quantity-to-be-charged-ais-271-300-days', 'estimated-ais-271-300-days',
+  'quantity-to-be-charged-ais-301-330-days', 'estimated-ais-301-330-days',
+  'quantity-to-be-charged-ais-331-365-days', 'estimated-ais-331-365-days',
+  'quantity-to-be-charged-ais-365-plus-days', 'estimated-ais-365-plus-days',
+  'historical-days-of-supply', 'fba-minimum-inventory-level',
+  'Recommended ship-in quantity',
+  'Short term historical days of supply / UK Reserved FC Transfer',
+  'Long term historical days of supply',
+  'Inventory Supply at FBA / UK Total Days of Supply',
+  'Reserved FC Transfer', 'Reserved FC Processing', 'Reserved Customer Order',
+  'Total Days of Supply (including units from open shipments)',
+]);
+
+function parseVal(col: string, val: string): string | number {
+  if (NUMERIC_COLS.has(col)) {
+    const n = parseFloat(val);
+    return isNaN(n) ? '' : n;
+  }
+  return val;
+}
+
 async function main() {
   console.log('FBA Inventory → Google Sheets');
   console.log('------------------------------');
@@ -65,7 +105,7 @@ async function main() {
   // 1. Download report for each marketplace and combine rows
   console.log('Step 1: Downloading Manage FBA Inventory reports from Amazon...');
 
-  const allRows: string[][] = [];
+  const allRows: (string | number)[][] = [];
 
   for (const market of MARKETPLACES) {
     console.log(`  Requesting ${market.label} report...`);
@@ -77,7 +117,7 @@ async function main() {
     const rows = parseTsv(report.rawText);
     for (const row of rows) {
       row['marketplace'] = market.label;
-      allRows.push(COLUMN_ORDER.map(col => row[col] ?? ''));
+      allRows.push(COLUMN_ORDER.map(col => parseVal(col, row[col] ?? '')));
     }
 
     console.log(`    ${rows.length} rows (${Object.keys(rows[0] ?? {}).length} columns)`);
