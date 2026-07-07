@@ -180,6 +180,11 @@ async function main(): Promise<void> {
     }
   }
 
+  console.log('\nAmazon shipment names loaded:');
+  for (const s of allShipments) {
+    console.log(`  [${s.ShipmentStatus}] "${s.ShipmentName}" (ETA: ${s.EstimatedArrivalDate ?? 'none'})`);
+  }
+
   const parents = await getAglParentTasks();
   console.log(`\nFound ${parents.length} CF-AGL task(s).`);
 
