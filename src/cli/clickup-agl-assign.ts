@@ -9,7 +9,7 @@ import 'dotenv/config';
 
 const WORKSPACE_ID = '20480650';
 const API_BASE    = 'https://api.clickup.com/api/v2';
-const AGL_TAG     = 'agl';
+const AGL_TAG     = 'cf-agl';
 
 interface CuUser {
   id: number;
