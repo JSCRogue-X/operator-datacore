@@ -109,18 +109,18 @@ async function postComment(taskId: string, text: string): Promise<void> {
 
 // ── SP-API helpers ────────────────────────────────────────────────────────────
 
+const INACTIVE_STATUSES = new Set(['CANCELLED', 'DELETED', 'CLOSED', 'ERROR']);
+
 async function getAllShipments(spClient: SpApiClient, marketplaceId: string): Promise<SpShipment[]> {
   const all: SpShipment[] = [];
   let nextToken: string | undefined;
 
   do {
+    // No ShipmentStatusList filter — the v0 endpoint does not reliably handle repeated
+    // query params for that field, so we fetch everything and filter client-side.
     const query: Record<string, string | string[] | undefined> = nextToken
       ? { QueryType: 'NEXT_TOKEN', NextToken: nextToken }
-      : {
-          QueryType: 'SHIPMENT',
-          MarketplaceId: marketplaceId,
-          ShipmentStatusList: ['WORKING', 'SHIPPED', 'IN_TRANSIT', 'RECEIVING', 'CHECKED_IN'],
-        };
+      : { QueryType: 'SHIPMENT', MarketplaceId: marketplaceId };
 
     const resp = await spClient.request<GetShipmentsResponse>({
       method: 'GET',
@@ -128,7 +128,8 @@ async function getAllShipments(spClient: SpApiClient, marketplaceId: string): Pr
       query,
     });
 
-    all.push(...(resp.payload.payload?.ShipmentData ?? []));
+    const shipments = resp.payload.payload?.ShipmentData ?? [];
+    all.push(...shipments.filter(s => !INACTIVE_STATUSES.has(s.ShipmentStatus)));
     nextToken = resp.payload.payload?.NextToken;
   } while (nextToken);
 
