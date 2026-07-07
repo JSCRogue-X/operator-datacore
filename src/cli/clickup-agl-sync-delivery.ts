@@ -109,18 +109,22 @@ async function postComment(taskId: string, text: string): Promise<void> {
 
 // ── SP-API helpers ────────────────────────────────────────────────────────────
 
-const INACTIVE_STATUSES = new Set(['CANCELLED', 'DELETED', 'CLOSED', 'ERROR']);
+// The v0 inbound endpoint processes only one ShipmentStatusList value per request,
+// so we query each active status separately and deduplicate by ShipmentId.
+const ACTIVE_STATUSES = ['WORKING', 'SHIPPED', 'IN_TRANSIT', 'RECEIVING', 'CHECKED_IN'];
 
-async function getAllShipments(spClient: SpApiClient, marketplaceId: string): Promise<SpShipment[]> {
+async function fetchByStatus(
+  spClient: SpApiClient,
+  marketplaceId: string,
+  status: string,
+): Promise<SpShipment[]> {
   const all: SpShipment[] = [];
   let nextToken: string | undefined;
 
   do {
-    // No ShipmentStatusList filter — the v0 endpoint does not reliably handle repeated
-    // query params for that field, so we fetch everything and filter client-side.
-    const query: Record<string, string | string[] | undefined> = nextToken
+    const query: Record<string, string | undefined> = nextToken
       ? { QueryType: 'NEXT_TOKEN', NextToken: nextToken }
-      : { QueryType: 'SHIPMENT', MarketplaceId: marketplaceId };
+      : { QueryType: 'SHIPMENT', MarketplaceId: marketplaceId, ShipmentStatusList: status };
 
     const resp = await spClient.request<GetShipmentsResponse>({
       method: 'GET',
@@ -128,10 +132,32 @@ async function getAllShipments(spClient: SpApiClient, marketplaceId: string): Pr
       query,
     });
 
-    const shipments = resp.payload.payload?.ShipmentData ?? [];
-    all.push(...shipments.filter(s => !INACTIVE_STATUSES.has(s.ShipmentStatus)));
+    all.push(...(resp.payload.payload?.ShipmentData ?? []));
     nextToken = resp.payload.payload?.NextToken;
   } while (nextToken);
+
+  return all;
+}
+
+async function getAllShipments(spClient: SpApiClient, marketplaceId: string): Promise<SpShipment[]> {
+  const seen = new Set<string>();
+  const all: SpShipment[] = [];
+
+  for (const status of ACTIVE_STATUSES) {
+    try {
+      const batch = await fetchByStatus(spClient, marketplaceId, status);
+      for (const s of batch) {
+        if (!seen.has(s.ShipmentId)) {
+          seen.add(s.ShipmentId);
+          all.push(s);
+        }
+      }
+    } catch (err) {
+      // A status with no shipments may 400 — skip it
+      const msg = (err as Error).message;
+      if (!msg.includes('400')) throw err;
+    }
+  }
 
   return all;
 }
