@@ -87,7 +87,7 @@ function isTomorrow(dueDateMs: number): boolean {
   // Compare dates in Europe/London timezone so BST/GMT offsets don't cause missed assignments
   const tz = 'Europe/London';
   const toDateStr = (ms: number) => new Date(ms).toLocaleDateString('sv', { timeZone: tz }); // sv = YYYY-MM-DD
-  const [y, m, d] = toDateStr(Date.now()).split('-').map(Number);
+  const [y, m, d] = toDateStr(Date.now()).split('-').map(Number) as [number, number, number];
   const tomorrowStr = toDateStr(new Date(Date.UTC(y, m - 1, d + 1)).getTime());
   return toDateStr(dueDateMs) === tomorrowStr;
 }
