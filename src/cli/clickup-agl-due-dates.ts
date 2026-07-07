@@ -38,6 +38,7 @@ interface CuTask {
   name: string;
   parent: string | null;
   due_date: string | null;
+  status: { type: string };
   subtasks?: CuTask[];
   tags: { name: string }[];
 }
@@ -140,6 +141,10 @@ async function processTask(parent: CuTask): Promise<void> {
         missing++;
         continue;
       }
+      if (subtask.status?.type === 'closed') {
+        console.log(`  SKIP (completed): "${subtask.name}"`);
+        continue;
+      }
       const newMs = addDays(completionMs, offset);
       await setDueDate(subtask.id, newMs);
       const sign = offset >= 0 ? `+${offset}` : `${offset}`;
@@ -157,6 +162,10 @@ async function processTask(parent: CuTask): Promise<void> {
       if (!subtask) {
         console.log(`  SKIP (not found): "${nameLower}"`);
         missing++;
+        continue;
+      }
+      if (subtask.status?.type === 'closed') {
+        console.log(`  SKIP (completed): "${subtask.name}"`);
         continue;
       }
       const newMs = addDays(deliveryMs, offset);
