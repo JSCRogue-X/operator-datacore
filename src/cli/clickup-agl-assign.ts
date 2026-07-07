@@ -72,7 +72,7 @@ async function getSubtasks(taskId: string): Promise<CuTask[]> {
 async function assignUser(taskId: string, userId: number): Promise<void> {
   await cuFetch(`/task/${taskId}`, {
     method: 'PUT',
-    body: JSON.stringify({ assignees: { add: [userId], rem: [] } }),
+    body: JSON.stringify({ assignees: { add: [userId], rem: [] }, status: 'Assigned' }),
   });
 }
 
