@@ -54,7 +54,7 @@ async function main() {
     refreshToken: env.SP_API_REFRESH_TOKEN,
   });
 
-  const allRows: string[][] = [];
+  const allRows: (string | number)[][] = [];
   // PAN-EU: IE, NL, BE share DE's warehouse stock, so their FBA total
   // quantity should mirror DE's figure rather than their own (often blank).
   const PAN_EU_COPY_FROM_DE = new Set(['IE', 'NL', 'BE']);
@@ -120,9 +120,9 @@ async function main() {
         listing['asin1'] ?? '',
         market.code,
         listing['status'] ?? '',
-        fbaRow['available'] ?? '',
-        totalQty > 0 ? String(totalQty) : '',
-        fbaRow['Total Reserved Quantity'] ?? '',
+        available > 0 ? available : '',
+        totalQty > 0 ? totalQty : '',
+        reserved > 0 ? reserved : '',
         fbaRow['asin'] ?? '',
       ]);
     }
