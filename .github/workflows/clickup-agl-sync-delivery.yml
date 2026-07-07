@@ -1,0 +1,39 @@
+name: ClickUp AGL - Sync Delivery Dates
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 7am UTC (8am BST)
+  workflow_dispatch:       # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  sync-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+      SP_API_REGION: eu
+      CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync delivery dates from Amazon
+        run: npx tsx src/cli/clickup-agl-sync-delivery.ts
