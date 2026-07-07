@@ -1,0 +1,29 @@
+name: ClickUp AGL - Set Due Dates
+
+on:
+  workflow_dispatch:  # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  set-due-dates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set AGL due dates
+        run: npx tsx src/cli/clickup-agl-due-dates.ts

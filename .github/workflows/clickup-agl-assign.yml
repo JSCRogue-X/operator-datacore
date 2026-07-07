@@ -1,0 +1,31 @@
+name: ClickUp AGL - Auto Assign
+
+on:
+  schedule:
+    - cron: '0 9 * * 1-5'  # Every weekday at 9am UTC (10am BST)
+  workflow_dispatch:         # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  auto-assign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Auto-assign due tomorrow
+        run: npx tsx src/cli/clickup-agl-assign.ts
