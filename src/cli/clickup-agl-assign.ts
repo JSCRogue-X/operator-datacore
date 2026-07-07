@@ -84,10 +84,12 @@ async function postComment(taskId: string, text: string): Promise<void> {
 }
 
 function isTomorrow(dueDateMs: number): boolean {
-  const now = new Date();
-  const tomorrowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  const tomorrowEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2));
-  return dueDateMs >= tomorrowStart.getTime() && dueDateMs < tomorrowEnd.getTime();
+  // Compare dates in Europe/London timezone so BST/GMT offsets don't cause missed assignments
+  const tz = 'Europe/London';
+  const toDateStr = (ms: number) => new Date(ms).toLocaleDateString('sv', { timeZone: tz }); // sv = YYYY-MM-DD
+  const [y, m, d] = toDateStr(Date.now()).split('-').map(Number);
+  const tomorrowStr = toDateStr(new Date(Date.UTC(y, m - 1, d + 1)).getTime());
+  return toDateStr(dueDateMs) === tomorrowStr;
 }
 
 async function main(): Promise<void> {
