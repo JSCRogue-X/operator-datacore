@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 // clickup-agl-sync-delivery.ts
-// Reads EstimatedArrivalDate from Amazon SP-API for each CF-AGL shipment,
+// Reads EstimatedArrivalDate from Amazon SP-API for each AGL shipment,
 // updates the "Delivery Date" subtask in ClickUp, and re-cascades due dates
-// on any incomplete subtasks.
+// on any incomplete subtasks. Handles cf-agl, gk-agl, and kin-agl tags.
 // Schedule: Daily via GitHub Actions.
 // Run: npx tsx src/cli/clickup-agl-sync-delivery.ts
 
@@ -12,7 +12,7 @@ import { SpApiClient } from '../lib/sp-api/client.js';
 
 const WORKSPACE_ID = '20480650';
 const CU_API_BASE  = 'https://api.clickup.com/api/v2';
-const AGL_TAG      = 'cf-agl';
+const ALL_AGL_TAGS = ['cf-agl', 'gk-agl', 'kin-agl'];
 
 const MARKETPLACES = [
   { id: 'A1F83G8C2ARO7P', label: 'UK' },
@@ -73,12 +73,12 @@ async function cuFetch(path: string, opts: RequestInit = {}): Promise<unknown> {
   return res.json();
 }
 
-async function getAglParentTasks(): Promise<CuTask[]> {
+async function getTasksForTag(tag: string): Promise<CuTask[]> {
   const tasks: CuTask[] = [];
   let page = 0;
   while (true) {
     const data = await cuFetch(
-      `/team/${WORKSPACE_ID}/task?tags[]=${AGL_TAG}&include_closed=false&subtasks=false&page=${page}`,
+      `/team/${WORKSPACE_ID}/task?tags[]=${tag}&include_closed=false&subtasks=false&page=${page}`,
     ) as { tasks: CuTask[] };
     if (!data.tasks?.length) break;
     tasks.push(...data.tasks.filter(t => !t.parent));
@@ -86,6 +86,15 @@ async function getAglParentTasks(): Promise<CuTask[]> {
     page++;
   }
   return tasks;
+}
+
+async function getAglParentTasks(): Promise<CuTask[]> {
+  const all: CuTask[] = [];
+  for (const tag of ALL_AGL_TAGS) {
+    const tasks = await getTasksForTag(tag);
+    all.push(...tasks);
+  }
+  return all;
 }
 
 async function getSubtasks(taskId: string): Promise<CuTask[]> {
@@ -213,7 +222,7 @@ async function main(): Promise<void> {
   }
 
   const parents = await getAglParentTasks();
-  console.log(`\nFound ${parents.length} CF-AGL task(s).`);
+  console.log(`\nFound ${parents.length} AGL task(s) (cf-agl / gk-agl / kin-agl).`);
 
   for (const parent of parents) {
     console.log(`\nProcessing: ${parent.name}`);

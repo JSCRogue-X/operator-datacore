@@ -9,7 +9,7 @@ import 'dotenv/config';
 
 const WORKSPACE_ID = '20480650';
 const API_BASE    = 'https://api.clickup.com/api/v2';
-const AGL_TAG     = 'cf-agl';
+const ALL_AGL_TAGS = ['cf-agl', 'gk-agl', 'kin-agl'];
 
 interface CuUser {
   id: number;
@@ -49,12 +49,12 @@ async function getCurrentUser(): Promise<CuUser> {
   return data.user;
 }
 
-async function getAglParentTasks(): Promise<CuTask[]> {
+async function getTasksForTag(tag: string): Promise<CuTask[]> {
   const tasks: CuTask[] = [];
   let page = 0;
   while (true) {
     const data = await cuFetch(
-      `/team/${WORKSPACE_ID}/task?tags[]=${AGL_TAG}&include_closed=false&subtasks=false&page=${page}`,
+      `/team/${WORKSPACE_ID}/task?tags[]=${tag}&include_closed=false&subtasks=false&page=${page}`,
     ) as { tasks: CuTask[] };
     if (!data.tasks?.length) break;
     tasks.push(...data.tasks.filter(t => !t.parent));
@@ -62,6 +62,15 @@ async function getAglParentTasks(): Promise<CuTask[]> {
     page++;
   }
   return tasks;
+}
+
+async function getAglParentTasks(): Promise<CuTask[]> {
+  const all: CuTask[] = [];
+  for (const tag of ALL_AGL_TAGS) {
+    const tasks = await getTasksForTag(tag);
+    all.push(...tasks);
+  }
+  return all;
 }
 
 async function getSubtasks(taskId: string): Promise<CuTask[]> {
