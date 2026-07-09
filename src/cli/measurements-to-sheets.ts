@@ -77,17 +77,12 @@ async function main() {
     refreshToken: env.SP_API_REFRESH_TOKEN,
   });
 
-  const dataEndTime = new Date();
-  const dataStartTime = new Date(dataEndTime.getTime() - 60 * 24 * 60 * 60 * 1000);
-
-  console.log(`Date range: ${dataStartTime.toISOString().slice(0, 10)} → ${dataEndTime.toISOString().slice(0, 10)}`);
   console.log('Fetching FBA Storage Fee Charges report...');
 
+  // GET_FBA_STORAGE_FEE_CHARGES_DATA is a snapshot report — no date range supported
   const report = await runReport(spClient, {
     reportType: 'GET_FBA_STORAGE_FEE_CHARGES_DATA',
     marketplaceIds: MARKETPLACE_IDS,
-    dataStartTime,
-    dataEndTime,
   });
 
   const rows = parseTsv(report.rawText);
