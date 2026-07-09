@@ -130,9 +130,19 @@ async function main() {
     spreadsheetId: SPREADSHEET_ID,
     range: `${TAB_NAME}!A1`,
   });
-  const isEmpty = (existing.data.values?.[0]?.[0] ?? '') === '';
+  const cellA1 = (existing.data.values?.[0]?.[0] ?? '') as string;
+  const isEmpty = cellA1 === '';
+  const isOldFormat = cellA1 === 'OVERALL ACCOUNT HEALTH';
 
-  if (isEmpty) {
+  if (isOldFormat) {
+    console.log('  Old format detected — clearing tab for rebuild with correct labels...');
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SPREADSHEET_ID,
+      range: TAB_NAME,
+    });
+  }
+
+  if (isEmpty || isOldFormat) {
     const rowsToWrite = [
       ['OVERALL AHR SCORE (0-1000)'],
       HEADER,
