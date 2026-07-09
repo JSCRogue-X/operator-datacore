@@ -78,11 +78,11 @@ async function main() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // One report call returns all EU marketplaces in a single response
-  console.log('Requesting GET_V2_SELLER_PERFORMANCE_REPORT (single call covers all marketplaces)...');
+  // Pass all marketplace IDs so the report includes every marketplace in the response
+  console.log('Requesting GET_V2_SELLER_PERFORMANCE_REPORT (all marketplaces)...');
   const report = await runReport(spClient, {
     reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
-    marketplaceIds: ['A1F83G8C2ARO7P'], // GB as trigger — response always includes all EU
+    marketplaceIds: MARKETPLACES.map(m => m.id),
   });
 
   const data = JSON.parse(report.rawText) as { performanceMetrics: PerfMetric[] };
