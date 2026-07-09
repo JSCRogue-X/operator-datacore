@@ -79,11 +79,23 @@ async function main() {
 
   console.log('Fetching FBA Storage Fee Charges report...');
 
-  // GET_FBA_STORAGE_FEE_CHARGES_DATA is a snapshot report — no date range supported
-  const report = await runReport(spClient, {
-    reportType: 'GET_FBA_STORAGE_FEE_CHARGES_DATA',
-    marketplaceIds: MARKETPLACE_IDS,
-  });
+  // GET_FBA_STORAGE_FEE_CHARGES_DATA is a monthly billing snapshot — request with GB only
+  // (some EU reports reject multiple marketplace IDs). CANCELLED means Amazon hasn't
+  // generated the report yet (only available after month-end close).
+  let report;
+  try {
+    report = await runReport(spClient, {
+      reportType: 'GET_FBA_STORAGE_FEE_CHARGES_DATA',
+      marketplaceIds: ['A1F83G8C2ARO7P'],
+    });
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes('CANCELLED') || msg.includes('FATAL')) {
+      console.warn('  Report not available yet (CANCELLED) — skipping. Will retry next run.');
+      return;
+    }
+    throw err;
+  }
 
   const rows = parseTsv(report.rawText);
   console.log(`  ${rows.length} rows fetched`);
