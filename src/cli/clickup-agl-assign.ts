@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // clickup-agl-assign.ts
-// Finds subtasks under AGL-tagged parent tasks that are due tomorrow and have no assignee.
+// Finds subtasks under AGL-tagged parent tasks that are due tomorrow or overdue and have no assignee.
 // Assigns them to the authenticated user (Jon) and posts a summary comment.
 // Schedule: Every weekday at 9am UTC via GitHub Actions.
 // Run: npx tsx src/cli/clickup-agl-assign.ts
@@ -83,13 +83,14 @@ async function postComment(taskId: string, text: string): Promise<void> {
   });
 }
 
-function isTomorrow(dueDateMs: number): boolean {
-  // Compare dates in Europe/London timezone so BST/GMT offsets don't cause missed assignments
+function isDueTomorrowOrEarlier(dueDateMs: number): boolean {
+  // Returns true for overdue tasks as well as tasks due tomorrow.
+  // Uses Europe/London so BST/GMT offsets don't cause missed assignments.
   const tz = 'Europe/London';
   const toDateStr = (ms: number) => new Date(ms).toLocaleDateString('sv', { timeZone: tz }); // sv = YYYY-MM-DD
   const [y, m, d] = toDateStr(Date.now()).split('-').map(Number) as [number, number, number];
   const tomorrowStr = toDateStr(new Date(Date.UTC(y, m - 1, d + 1)).getTime());
-  return toDateStr(dueDateMs) === tomorrowStr;
+  return toDateStr(dueDateMs) <= tomorrowStr;
 }
 
 async function main(): Promise<void> {
@@ -110,7 +111,7 @@ async function main(): Promise<void> {
 
     for (const sub of subtasks) {
       if (!sub.due_date) continue;
-      if (!isTomorrow(parseInt(sub.due_date, 10))) continue;
+      if (!isDueTomorrowOrEarlier(parseInt(sub.due_date, 10))) continue;
       if (sub.assignees.length > 0) continue;
 
       await assignUser(sub.id, user.id);
@@ -121,7 +122,7 @@ async function main(): Promise<void> {
 
     if (assigned.length > 0) {
       const msg = [
-        `Auto-assigned ${assigned.length} subtask(s) due tomorrow:`,
+        `Auto-assigned ${assigned.length} subtask(s) due tomorrow or overdue:`,
         ...assigned,
         `\nAssigned to: ${user.username}`,
         `Run at ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}.`,
@@ -131,7 +132,7 @@ async function main(): Promise<void> {
   }
 
   if (totalAssigned === 0) {
-    console.log('No unassigned subtasks due tomorrow.');
+    console.log('No unassigned subtasks due tomorrow or overdue.');
   } else {
     console.log(`\nDone. ${totalAssigned} subtask(s) assigned.`);
   }
