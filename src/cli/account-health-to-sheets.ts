@@ -1,9 +1,8 @@
 #!/usr/bin/env tsx
 // Fetches Amazon Account Health for all EU marketplaces and appends a weekly
 // snapshot row (one column per marketplace) to the "Account Health" tab.
-// AHR scores come from /accountHealth/2024-04-01/accountHealthRating (requires
-// the "Account Health" SP-API role granted in Seller Central → Apps & Services).
-// Performance metrics (ODR, late shipment, etc.) come from GET_V2_SELLER_PERFORMANCE_REPORT.
+// A single GET_V2_SELLER_PERFORMANCE_REPORT call returns all marketplaces at once.
+// Run: npx tsx src/cli/account-health-to-sheets.ts
 
 import 'dotenv/config';
 import { google } from 'googleapis';
@@ -15,83 +14,55 @@ const SPREADSHEET_ID = process.env.IPI_SHEET_ID ?? '1AH5S_335Jj2BS18Am9i37hlAYo4
 const TAB_NAME = 'Account Health';
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
+// Ordered list of marketplaces to show as columns in the sheet
 const MARKETPLACES = [
   { label: 'GB', id: 'A1F83G8C2ARO7P' },
   { label: 'DE', id: 'A1PA6795UKMFR9' },
   { label: 'FR', id: 'A13V1IB3VIYZZH' },
-  { label: 'IT', id: 'APJ6JRA9NG5V4' },
+  { label: 'IT', id: 'APJ6JRA9NG5V4'  },
   { label: 'ES', id: 'A1RKKUPIHCS9HS' },
   { label: 'NL', id: 'A1805IZSGTT6HS' },
   { label: 'IE', id: 'A28R8C7NBKEWEA' },
-  { label: 'BE', id: 'AMEN7PMS3EDWL' },
+  { label: 'BE', id: 'AMEN7PMS3EDWL'  },
   { label: 'SE', id: 'A2NODRKZP88ZB9' },
+  { label: 'PL', id: 'A1C3SOZRARQ6R3' },
+  { label: 'TR', id: 'A33AVAJ2PDY3EV' },
 ];
 
 interface HealthMetrics {
-  overall: string;
-  odrRate: string;
+  ahrScore:         string;  // 0–1000
+  ahrStatus:        string;  // GREAT / GOOD / AT_RISK / CRITICAL
+  odrRate:          string;  // AFN order defect rate (decimal)
   lateShipmentRate: string;
   cancellationRate: string;
-  returnDissatisfactionRate: string;
+  policyWarnings:   string;  // count of live policy warnings
 }
 
-// Fetches the real Account Health Rating score (0–1000) for one marketplace.
-// Requires the "Account Health" SP-API role in Seller Central → Apps & Services → Develop Apps.
-// Returns null if the role is not granted (403) or the call fails for any reason.
-async function fetchAhrScore(spClient: SpApiClient, marketplaceId: string): Promise<number | null> {
-  try {
-    const res = await spClient.request<Record<string, unknown>>({
-      method: 'GET',
-      path: '/accountHealth/2024-04-01/accountHealthRating',
-      query: { marketplaceIds: marketplaceId },
-    });
-    const p = res.payload as Record<string, unknown>;
-    const rating = (p?.accountHealthRating ?? p) as Record<string, unknown>;
-    const score = rating?.score ?? rating?.value ?? rating?.ahrScore;
-    return typeof score === 'number' ? score : null;
-  } catch {
-    return null;
-  }
+interface PerfMetric {
+  marketplaceId: string;
+  accountHealthRating?:          { ahrScore: number; ahrStatus: string };
+  lateShipmentRate?:             { rate: number };
+  orderDefectRate?:              { afn?: { rate: number }; mfn?: { rate: number } };
+  preFulfillmentCancellationRate?: { rate: number };
+  policyViolationWarnings?:      { warningsCount: number };
 }
 
-function parseHealthJson(raw: string, ahrScore: number | null): HealthMetrics {
-  try {
-    const data = JSON.parse(raw);
-
-    // Use real AHR score when available; fall back to status-based approximation otherwise
-    let overall: string;
-    if (ahrScore !== null) {
-      overall = String(ahrScore);
-    } else {
-      const accountStatus = (data.accountStatuses?.[0]?.status ?? '').toUpperCase();
-      overall = accountStatus === 'NORMAL' ? '1000'
-        : accountStatus === 'AT_RISK' ? '500'
-        : accountStatus === 'CRITICAL' ? '0'
-        : 'N/A';
-    }
-
-    const metrics = data.performanceMetrics?.[0] ?? {};
-
-    const getRate = (key: string): string => {
-      const val = metrics[key]?.rate;
-      return (val !== undefined && val !== null) ? String(val) : 'N/A';
-    };
-
-    // orderDefectRate nests as { afn: { rate }, mfn: { rate } } in V2 — not a direct .rate
-    const odrField = metrics['orderDefectRate'];
-    const odrVal = odrField?.rate ?? odrField?.afn?.rate;
-
-    return {
-      overall,
-      odrRate: (odrVal !== undefined && odrVal !== null) ? String(odrVal) : 'N/A',
-      lateShipmentRate: getRate('lateShipmentRate'),
-      cancellationRate: getRate('preFulfillmentCancellationRate'),
-      returnDissatisfactionRate: getRate('returnDissatisfactionRate'),
-    };
-  } catch {
-    return { overall: 'N/A', odrRate: 'N/A', lateShipmentRate: 'N/A', cancellationRate: 'N/A', returnDissatisfactionRate: 'N/A' };
-  }
+function extractMetrics(m: PerfMetric): HealthMetrics {
+  const str = (n: number | undefined): string => n !== undefined ? String(n) : 'N/A';
+  return {
+    ahrScore:         str(m.accountHealthRating?.ahrScore),
+    ahrStatus:        m.accountHealthRating?.ahrStatus ?? 'N/A',
+    odrRate:          str(m.orderDefectRate?.afn?.rate),
+    lateShipmentRate: str(m.lateShipmentRate?.rate),
+    cancellationRate: str(m.preFulfillmentCancellationRate?.rate),
+    policyWarnings:   str(m.policyViolationWarnings?.warningsCount),
+  };
 }
+
+const EMPTY_METRICS: HealthMetrics = {
+  ahrScore: 'N/A', ahrStatus: 'N/A', odrRate: 'N/A',
+  lateShipmentRate: 'N/A', cancellationRate: 'N/A', policyWarnings: 'N/A',
+};
 
 async function main() {
   console.log('Account Health → Google Sheets');
@@ -107,69 +78,44 @@ async function main() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  console.log(`Step 1: Fetching health reports for all ${MARKETPLACES.length} marketplaces sequentially...`);
+  // One report call returns all EU marketplaces in a single response
+  console.log('Requesting GET_V2_SELLER_PERFORMANCE_REPORT (single call covers all marketplaces)...');
+  const report = await runReport(spClient, {
+    reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
+    marketplaceIds: ['A1F83G8C2ARO7P'], // GB as trigger — response always includes all EU
+  });
 
-  const results: PromiseSettledResult<{ label: string; metrics: HealthMetrics }>[] = [];
-  let loggedAhrMissing = false;
-  for (let i = 0; i < MARKETPLACES.length; i++) {
-    const m = MARKETPLACES[i]!;
+  const data = JSON.parse(report.rawText) as { performanceMetrics: PerfMetric[] };
+  const byId = new Map<string, HealthMetrics>(
+    (data.performanceMetrics ?? []).map(m => [m.marketplaceId, extractMetrics(m)]),
+  );
 
-    // Fetch real AHR score (0–1000) from the Account Health API
-    const ahrScore = await fetchAhrScore(spClient, m.id);
-    if (ahrScore === null && !loggedAhrMissing) {
-      loggedAhrMissing = true;
-      console.log('  [AHR] Real scores unavailable — grant the "Account Health" role in');
-      console.log('  Seller Central → Apps & Services → Develop Apps, then scores will auto-populate.');
-    }
-
-    try {
-      const report = await runReport(spClient, {
-        reportType: 'GET_V2_SELLER_PERFORMANCE_REPORT',
-        marketplaceIds: [m.id],
-      });
-      results.push({ status: 'fulfilled', value: { label: m.label, metrics: parseHealthJson(report.rawText, ahrScore) } });
-    } catch (err) {
-      results.push({ status: 'rejected', reason: err });
-    }
-    if (i < MARKETPLACES.length - 1) {
-      console.log('  Waiting 15s before next marketplace...');
-      await new Promise(r => setTimeout(r, 15_000));
-    }
+  console.log(`Parsed ${byId.size} marketplace(s) from report.`);
+  for (const mkt of MARKETPLACES) {
+    const m = byId.get(mkt.id) ?? EMPTY_METRICS;
+    console.log(`  ${mkt.label}: AHR ${m.ahrScore} (${m.ahrStatus})`);
   }
 
-  const metricsMap: Record<string, HealthMetrics | null> = {};
-  for (let i = 0; i < MARKETPLACES.length; i++) {
-    const m = MARKETPLACES[i]!;
-    const r = results[i]!;
-    if (r.status === 'fulfilled') {
-      metricsMap[m.label] = r.value.metrics;
-      console.log(`  ${m.label}: ${r.value.metrics.overall}`);
-    } else {
-      metricsMap[m.label] = null;
-      console.log(`  ${m.label}: FAILED — ${String(r.reason).slice(0, 100)}`);
-    }
-  }
+  const labels  = MARKETPLACES.map(m => m.label);
+  const val     = (label: string, key: keyof HealthMetrics) =>
+    (byId.get(MARKETPLACES.find(m => m.label === label)!.id) ?? EMPTY_METRICS)[key];
 
-  const labels = MARKETPLACES.map(m => m.label);
-  const val = (label: string, key: keyof HealthMetrics) => metricsMap[label]?.[key] ?? 'N/A';
+  const HEADER       = ['snapshot_date', ...labels];
+  const ahrScoreRow  = [today, ...labels.map(l => val(l, 'ahrScore'))];
+  const ahrStatusRow = [today, ...labels.map(l => val(l, 'ahrStatus'))];
+  const odrRow       = [today, ...labels.map(l => val(l, 'odrRate'))];
+  const lateShipRow  = [today, ...labels.map(l => val(l, 'lateShipmentRate'))];
+  const cancelRow    = [today, ...labels.map(l => val(l, 'cancellationRate'))];
+  const warningsRow  = [today, ...labels.map(l => val(l, 'policyWarnings'))];
 
-  // One row per metric type, matching the multi-column table format from the image
-  const overallRow    = [today, ...labels.map(l => val(l, 'overall'))];
-  const odrRow        = [today, ...labels.map(l => val(l, 'odrRate'))];
-  const lateShipRow   = [today, ...labels.map(l => val(l, 'lateShipmentRate'))];
-  const cancelRow     = [today, ...labels.map(l => val(l, 'cancellationRate'))];
-  const returnRow     = [today, ...labels.map(l => val(l, 'returnDissatisfactionRate'))];
-
-  const HEADER = ['snapshot_date', ...labels];
-
-  console.log('\nStep 2: Writing to Google Sheets...');
+  console.log('\nWriting to Google Sheets...');
   const auth = new google.auth.GoogleAuth({
     keyFile: KEY_FILE,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Create "Account Health" tab if it doesn't exist
+  // Create tab if it doesn't exist
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
   const tabExists = spreadsheet.data.sheets?.some(s => s.properties?.title === TAB_NAME);
   if (!tabExists) {
@@ -180,24 +126,23 @@ async function main() {
     });
   }
 
-  // Read current content to decide whether to write section headers or just append
   const existing = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${TAB_NAME}!A1`,
   });
   const isEmpty = (existing.data.values?.[0]?.[0] ?? '') === '';
 
-  let rowsToWrite: string[][];
-  let writeRange: string;
-
   if (isEmpty) {
-    // First run: write full layout with section labels
-    rowsToWrite = [
-      ['OVERALL ACCOUNT HEALTH'],
+    const rowsToWrite = [
+      ['OVERALL AHR SCORE (0-1000)'],
       HEADER,
-      overallRow,
+      ahrScoreRow,
       [],
-      ['ORDER DEFECT RATE (90-day)'],
+      ['AHR STATUS'],
+      HEADER,
+      ahrStatusRow,
+      [],
+      ['ORDER DEFECT RATE - AFN (90-day)'],
       HEADER,
       odrRow,
       [],
@@ -209,30 +154,27 @@ async function main() {
       HEADER,
       cancelRow,
       [],
-      ['RETURN DISSATISFACTION RATE (30-day)'],
+      ['POLICY WARNINGS'],
       HEADER,
-      returnRow,
+      warningsRow,
     ];
-    writeRange = `${TAB_NAME}!A1`;
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: writeRange,
+      range: `${TAB_NAME}!A1`,
       valueInputOption: 'RAW',
       requestBody: { values: rowsToWrite },
     });
   } else {
-    // Subsequent runs: find each section and append the new data row below it
     const allCells = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${TAB_NAME}!A:A`,
     });
     const colA = (allCells.data.values ?? []).map(r => (r[0] ?? '') as string);
 
-    const appendSection = async (sectionLabel: string, newRow: string[]) => {
+    const appendSection = async (sectionLabel: string, newRow: (string | number)[]) => {
       const sectionIdx = colA.findIndex(v => v === sectionLabel);
       if (sectionIdx === -1) return;
-      // Data starts 2 rows after section label (label + header = +2), find next blank
-      let insertAt = sectionIdx + 3; // default: row after header
+      let insertAt = sectionIdx + 3;
       for (let i = sectionIdx + 2; i < colA.length; i++) {
         if (colA[i] === '' || colA[i] === undefined) { insertAt = i + 1; break; }
         insertAt = i + 2;
@@ -246,14 +188,15 @@ async function main() {
       });
     };
 
-    await appendSection('OVERALL ACCOUNT HEALTH', overallRow);
-    await appendSection('ORDER DEFECT RATE (90-day)', odrRow);
+    await appendSection('OVERALL AHR SCORE (0-1000)', ahrScoreRow);
+    await appendSection('AHR STATUS', ahrStatusRow);
+    await appendSection('ORDER DEFECT RATE - AFN (90-day)', odrRow);
     await appendSection('LATE SHIPMENT RATE (30-day)', lateShipRow);
     await appendSection('PRE-FULFILLMENT CANCELLATION RATE (30-day)', cancelRow);
-    await appendSection('RETURN DISSATISFACTION RATE (30-day)', returnRow);
+    await appendSection('POLICY WARNINGS', warningsRow);
   }
 
-  console.log(`  Done — "${TAB_NAME}" tab updated`);
+  console.log(`  Done — "${TAB_NAME}" tab updated.`);
   console.log('\nView: https://docs.google.com/spreadsheets/d/1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4/edit');
 }
 
