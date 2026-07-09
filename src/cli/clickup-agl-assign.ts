@@ -1,7 +1,10 @@
 #!/usr/bin/env tsx
 // clickup-agl-assign.ts
-// Finds subtasks under AGL-tagged parent tasks that are due tomorrow or overdue and have no assignee.
-// Assigns them to the authenticated user (Jon) and posts a summary comment.
+// Finds subtasks under AGL-tagged parent tasks with no assignee and assigns them
+// based on per-subtask assignment windows:
+//   - "1 week before" subtasks: assign when due within 7 days (or overdue)
+//   - "day before" subtasks: assign when due tomorrow or overdue
+//   - "manually done" subtasks (anchors + manual tasks): never auto-assign
 // Schedule: Every weekday at 9am UTC via GitHub Actions.
 // Run: npx tsx src/cli/clickup-agl-assign.ts
 
@@ -10,6 +13,26 @@ import 'dotenv/config';
 const WORKSPACE_ID = '20480650';
 const API_BASE    = 'https://api.clickup.com/api/v2';
 const ALL_AGL_TAGS = ['cf-agl', 'gk-agl', 'kin-agl'];
+
+// Anchor subtasks and manually-managed tasks — never auto-assign
+const NEVER_ASSIGN = new Set([
+  'order date',
+  'completion date',
+  'delivery date',
+  'move invoice into xero',
+  'switch on ppc for any out of stock lines',
+]);
+
+// Assign 7 days before the task date (payment / financial tasks)
+const ASSIGN_ONE_WEEK_BEFORE = new Set([
+  'pay deposit (if required)',
+  'make final payment',
+  'provide final costings',
+  'review import duties',
+  'update unit pricing (agl)',
+]);
+
+// All other subtasks: assign the day before (tomorrow or overdue)
 
 interface CuUser {
   id: number;
@@ -21,6 +44,7 @@ interface CuTask {
   name: string;
   parent: string | null;
   due_date: string | null;
+  status: { type: string };
   assignees: { id: number }[];
   subtasks?: CuTask[];
   tags: { name: string }[];
@@ -81,7 +105,7 @@ async function getSubtasks(taskId: string): Promise<CuTask[]> {
 async function assignUser(taskId: string, userId: number): Promise<void> {
   await cuFetch(`/task/${taskId}`, {
     method: 'PUT',
-    body: JSON.stringify({ assignees: { add: [userId], rem: [] }, status: 'Assigned' }),
+    body: JSON.stringify({ assignees: { add: [userId], rem: [] } }),
   });
 }
 
@@ -92,14 +116,24 @@ async function postComment(taskId: string, text: string): Promise<void> {
   });
 }
 
-function isDueTomorrowOrEarlier(dueDateMs: number): boolean {
-  // Returns true for overdue tasks as well as tasks due tomorrow.
-  // Uses Europe/London so BST/GMT offsets don't cause missed assignments.
-  const tz = 'Europe/London';
-  const toDateStr = (ms: number) => new Date(ms).toLocaleDateString('sv', { timeZone: tz }); // sv = YYYY-MM-DD
+// Uses Europe/London throughout so BST/GMT offsets don't cause missed assignments.
+const toDateStr = (ms: number) =>
+  new Date(ms).toLocaleDateString('sv', { timeZone: 'Europe/London' }); // sv = YYYY-MM-DD
+
+function todayPlusDaysStr(days: number): string {
   const [y, m, d] = toDateStr(Date.now()).split('-').map(Number) as [number, number, number];
-  const tomorrowStr = toDateStr(new Date(Date.UTC(y, m - 1, d + 1)).getTime());
-  return toDateStr(dueDateMs) <= tomorrowStr;
+  return toDateStr(new Date(Date.UTC(y, m - 1, d + days)).getTime());
+}
+
+function shouldAssignNow(subtaskNameLower: string, dueDateMs: number): boolean {
+  if (NEVER_ASSIGN.has(subtaskNameLower)) return false;
+
+  if (ASSIGN_ONE_WEEK_BEFORE.has(subtaskNameLower)) {
+    return toDateStr(dueDateMs) <= todayPlusDaysStr(7);
+  }
+
+  // Default: assign when due tomorrow or already overdue
+  return toDateStr(dueDateMs) <= todayPlusDaysStr(1);
 }
 
 async function main(): Promise<void> {
@@ -120,8 +154,11 @@ async function main(): Promise<void> {
 
     for (const sub of subtasks) {
       if (!sub.due_date) continue;
-      if (!isDueTomorrowOrEarlier(parseInt(sub.due_date, 10))) continue;
       if (sub.assignees.length > 0) continue;
+      if (sub.status?.type === 'closed') continue;
+
+      const nameLower = sub.name.trim().toLowerCase();
+      if (!shouldAssignNow(nameLower, parseInt(sub.due_date, 10))) continue;
 
       await assignUser(sub.id, user.id);
       assigned.push(`  ${sub.name}`);
@@ -131,7 +168,7 @@ async function main(): Promise<void> {
 
     if (assigned.length > 0) {
       const msg = [
-        `Auto-assigned ${assigned.length} subtask(s) due tomorrow or overdue:`,
+        `Auto-assigned ${assigned.length} subtask(s):`,
         ...assigned,
         `\nAssigned to: ${user.username}`,
         `Run at ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}.`,
@@ -141,7 +178,7 @@ async function main(): Promise<void> {
   }
 
   if (totalAssigned === 0) {
-    console.log('No unassigned subtasks due tomorrow or overdue.');
+    console.log('No unassigned subtasks ready for assignment.');
   } else {
     console.log(`\nDone. ${totalAssigned} subtask(s) assigned.`);
   }
