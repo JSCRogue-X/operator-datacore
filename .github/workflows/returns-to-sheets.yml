@@ -1,0 +1,43 @@
+name: FBA Customer Returns → Sheets
+
+on:
+  schedule:
+    - cron: '0 7 1 * *'  # 1st of every month at 7am UTC (8am BST)
+  workflow_dispatch:       # Manual "Run workflow" button in GitHub
+
+permissions:
+  contents: read
+
+jobs:
+  returns-to-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SP_API_LWA_CLIENT_ID: ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+      SP_API_REGION: eu
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+      IPI_SHEET_ID: 1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: FBA Customer Returns → Sheets
+        run: npx tsx src/cli/returns-to-sheets.ts
