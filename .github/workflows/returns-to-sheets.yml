@@ -1,9 +1,7 @@
 name: FBA Customer Returns → Sheets
 
 on:
-  schedule:
-    - cron: '0 7 1 * *'  # 1st of every month at 7am UTC (8am BST)
-  workflow_dispatch:       # Manual "Run workflow" button in GitHub
+  workflow_dispatch:  # Triggered externally via cron-job.org
 
 permissions:
   contents: read
