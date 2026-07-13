@@ -36,14 +36,11 @@ function toSheetDate(dateStr: string): number | string {
 const HEADERS = [
   'Return Date',
   'Order ID',
-  'SKU',
   'ASIN',
-  'Title',
   'Quantity',
   'Fulfilment Centre',
-  'Disposition',
   'Reason',
-  'Status',
+  'License Plate Number',
   'Customer Comments',
 ];
 
@@ -75,14 +72,11 @@ async function main() {
   const outputRows = rows.map(row => [
     toSheetDate(row['return-date'] ?? ''),
     row['order-id'] ?? '',
-    row['sku'] ?? '',
     row['asin'] ?? '',
-    row['title'] ?? '',
     parseInt(row['quantity'] ?? '0', 10) || 0,
     row['fulfillment-center-id'] ?? '',
-    row['detailed-disposition'] ?? '',
     row['reason'] ?? '',
-    row['status'] ?? '',
+    row['license-plate-number'] ?? '',
     row['customer-comments'] ?? '',
   ]);
 
