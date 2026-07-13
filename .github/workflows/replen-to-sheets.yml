@@ -19,6 +19,10 @@ jobs:
       SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
       SP_API_REGION: eu
       GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
     steps:
       - uses: actions/checkout@v4
