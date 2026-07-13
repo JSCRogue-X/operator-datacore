@@ -52,6 +52,11 @@ const TSV_MAP: Record<string, string> = {
   'IE Offer':          'IE Offer Status',
 };
 
+const OFFER_COLUMNS = new Set([
+  'UK Offer', 'DE Offer', 'FR Offer', 'IT Offer', 'ES Offer',
+  'NL Offer', 'SE Offer', 'PL Offer', 'BE Offer', 'IE Offer',
+]);
+
 async function fetchCachedReport(client: SpApiClient, reportType: string, label: string): Promise<string> {
   const list = await client.request<{ reports: Array<{ reportDocumentId: string; processingEndTime: string }> }>({
     method: 'GET',
@@ -142,7 +147,11 @@ async function main() {
   console.log(`  Rows matching current SKUs: ${activeRows.length}`);
 
   const outputRows = activeRows.map(row =>
-    HEADERS.map(h => row[TSV_MAP[h]!] ?? ''),
+    HEADERS.map(h => {
+      const raw = row[TSV_MAP[h]!] ?? '';
+      if (OFFER_COLUMNS.has(h)) return raw.trim() ? 'Listing' : 'No Listing';
+      return raw;
+    }),
   );
 
   console.log('\nWriting to Google Sheets...');
