@@ -50,9 +50,6 @@ jobs:
       - name: Script 2 — IPI Components → Sheets
         run: npx tsx src/cli/ipi-components-to-sheets.ts
 
-      - name: Script 3 — Account Health → Sheets
-        run: npx tsx src/cli/account-health-to-sheets.ts
-
       - name: Wait for SP-API rate limit recovery
         run: sleep 60
 
