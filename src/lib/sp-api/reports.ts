@@ -28,6 +28,8 @@ export interface RunReportOpts {
   dataStartTime?: Date;
   dataEndTime?: Date;
   reportOptions?: Record<string, string>;
+  /** Override retry count for the report-creation POST (default: 10). Pass 0 to fail fast on 429. */
+  createRetries?: number;
 }
 
 export interface ReportResult {
@@ -57,7 +59,7 @@ export async function runReport(client: SpApiClient, opts: RunReportOpts): Promi
       dataEndTime: opts.dataEndTime?.toISOString(),
       reportOptions: opts.reportOptions,
     },
-  });
+  }, opts.createRetries ?? 10);
 
   const reportId = create.payload.reportId;
   let meta: GetReportResp;

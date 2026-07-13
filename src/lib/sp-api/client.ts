@@ -40,11 +40,11 @@ export class SpApiClient {
     this.baseUrl = SP_API_ENDPOINTS[opts.region];
   }
 
-  async request<T>(req: SpApiRequest): Promise<SpApiResponse<T>> {
+  async request<T>(req: SpApiRequest, retries = 10): Promise<SpApiResponse<T>> {
     return pRetry(
       async () => this.requestOnce<T>(req),
       {
-        retries: 10,
+        retries,
         minTimeout: 1_000,
         factor: 2,
         maxTimeout: 30_000,
