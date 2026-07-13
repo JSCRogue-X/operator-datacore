@@ -57,6 +57,8 @@ const OFFER_COLUMNS = new Set([
   'NL Offer', 'SE Offer', 'PL Offer', 'BE Offer', 'IE Offer',
 ]);
 
+const NO_LISTING_VALUES = new Set(['no listing', 'no offer required', 'hazmat', '']);
+
 async function fetchCachedReport(client: SpApiClient, reportType: string, label: string): Promise<string> {
   const list = await client.request<{ reports: Array<{ reportDocumentId: string; processingEndTime: string }> }>({
     method: 'GET',
@@ -107,6 +109,10 @@ async function getCurrentSkus(client: SpApiClient): Promise<Set<string>> {
 }
 
 async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
+  if (process.env.FORCE_CACHED === '1') {
+    console.log('  FORCE_CACHED set — skipping fresh report creation.');
+    return fetchCachedReport(client, 'GET_PAN_EU_OFFER_STATUS', 'Pan-EU');
+  }
   try {
     console.log('  Requesting fresh Pan-EU report...');
     const result = await runReport(client, {
@@ -146,10 +152,11 @@ async function main() {
   const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
   console.log(`  Rows matching current SKUs: ${activeRows.length}`);
 
+
   const outputRows = activeRows.map(row =>
     HEADERS.map(h => {
       const raw = row[TSV_MAP[h]!] ?? '';
-      if (OFFER_COLUMNS.has(h)) return raw.trim() ? 'Listing' : 'No Listing';
+      if (OFFER_COLUMNS.has(h)) return NO_LISTING_VALUES.has(raw.trim().toLowerCase()) ? 'No Listing' : 'Listing';
       return raw;
     }),
   );
