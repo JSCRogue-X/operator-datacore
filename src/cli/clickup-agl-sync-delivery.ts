@@ -241,10 +241,14 @@ async function main(): Promise<void> {
       continue;
     }
 
-    // Match Amazon shipments by task name (case-insensitive)
-    const matched = allShipments.filter(
-      s => s.ShipmentName.trim().toLowerCase() === parent.name.trim().toLowerCase(),
-    );
+    // Match Amazon shipments by name — strip emoji/punctuation and use contains
+    // so flag prefixes (🇩🇪) or minor differences don't break the match
+    const norm = (s: string) => s.replace(/[^\p{L}\p{N}\s]/gu, '').trim().toLowerCase();
+    const taskNorm = norm(parent.name);
+    const matched = allShipments.filter(s => {
+      const shipNorm = norm(s.ShipmentName);
+      return shipNorm.includes(taskNorm) || taskNorm.includes(shipNorm);
+    });
 
     if (!matched.length) {
       console.log(`  No Amazon shipment found matching "${parent.name}"`);
