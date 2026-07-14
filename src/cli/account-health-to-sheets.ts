@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
-// Fetches Amazon Account Health for all EU marketplaces and appends a weekly
-// snapshot row (one column per marketplace) to the "Account Health" tab.
+// Fetches Amazon Account Health for all EU marketplaces and overwrites the
+// "Account Health" tab with the latest snapshot (one column per marketplace).
 // A single GET_V2_SELLER_PERFORMANCE_REPORT call returns all marketplaces at once.
 // Run: npx tsx src/cli/account-health-to-sheets.ts
 
@@ -108,6 +108,32 @@ async function main() {
   const cancelRow    = [today, ...labels.map(l => val(l, 'cancellationRate'))];
   const warningsRow  = [today, ...labels.map(l => val(l, 'policyWarnings'))];
 
+  const rowsToWrite = [
+    ['OVERALL AHR SCORE (0-1000)'],
+    HEADER,
+    ahrScoreRow,
+    [],
+    ['AHR STATUS'],
+    HEADER,
+    ahrStatusRow,
+    [],
+    ['ORDER DEFECT RATE - AFN (90-day)'],
+    HEADER,
+    odrRow,
+    [],
+    ['LATE SHIPMENT RATE (30-day)'],
+    HEADER,
+    lateShipRow,
+    [],
+    ['PRE-FULFILLMENT CANCELLATION RATE (30-day)'],
+    HEADER,
+    cancelRow,
+    [],
+    ['POLICY WARNINGS'],
+    HEADER,
+    warningsRow,
+  ];
+
   console.log('\nWriting to Google Sheets...');
   const auth = new google.auth.GoogleAuth({
     keyFile: KEY_FILE,
@@ -115,96 +141,36 @@ async function main() {
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Create tab if it doesn't exist
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const tabExists = spreadsheet.data.sheets?.some(s => s.properties?.title === TAB_NAME);
-  if (!tabExists) {
+  const existing = spreadsheet.data.sheets?.find(s => s.properties?.title === TAB_NAME);
+  let sheetId: number;
+
+  if (!existing) {
     console.log(`  Creating "${TAB_NAME}" tab...`);
-    await sheets.spreadsheets.batchUpdate({
+    const addResp = await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: { requests: [{ addSheet: { properties: { title: TAB_NAME } } }] },
     });
+    sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
+  } else {
+    sheetId = existing.properties?.sheetId ?? 0;
   }
 
-  const existing = await sheets.spreadsheets.values.get({
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        { updateCells: { range: { sheetId }, fields: 'userEnteredValue' } },
+      ],
+    },
+  });
+
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `${TAB_NAME}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: rowsToWrite },
   });
-  const cellA1 = (existing.data.values?.[0]?.[0] ?? '') as string;
-  const isEmpty = cellA1 === '';
-  const isOldFormat = cellA1 === 'OVERALL ACCOUNT HEALTH';
-
-  if (isOldFormat) {
-    console.log('  Old format detected — clearing tab for rebuild with correct labels...');
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: SPREADSHEET_ID,
-      range: TAB_NAME,
-    });
-  }
-
-  if (isEmpty || isOldFormat) {
-    const rowsToWrite = [
-      ['OVERALL AHR SCORE (0-1000)'],
-      HEADER,
-      ahrScoreRow,
-      [],
-      ['AHR STATUS'],
-      HEADER,
-      ahrStatusRow,
-      [],
-      ['ORDER DEFECT RATE - AFN (90-day)'],
-      HEADER,
-      odrRow,
-      [],
-      ['LATE SHIPMENT RATE (30-day)'],
-      HEADER,
-      lateShipRow,
-      [],
-      ['PRE-FULFILLMENT CANCELLATION RATE (30-day)'],
-      HEADER,
-      cancelRow,
-      [],
-      ['POLICY WARNINGS'],
-      HEADER,
-      warningsRow,
-    ];
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!A1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: rowsToWrite },
-    });
-  } else {
-    const allCells = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!A:A`,
-    });
-    const colA = (allCells.data.values ?? []).map(r => (r[0] ?? '') as string);
-
-    const appendSection = async (sectionLabel: string, newRow: (string | number)[]) => {
-      const sectionIdx = colA.findIndex(v => v === sectionLabel);
-      if (sectionIdx === -1) return;
-      let insertAt = sectionIdx + 3;
-      for (let i = sectionIdx + 2; i < colA.length; i++) {
-        if (colA[i] === '' || colA[i] === undefined) { insertAt = i + 1; break; }
-        insertAt = i + 2;
-      }
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${TAB_NAME}!A${insertAt}`,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: [newRow] },
-      });
-    };
-
-    await appendSection('OVERALL AHR SCORE (0-1000)', ahrScoreRow);
-    await appendSection('AHR STATUS', ahrStatusRow);
-    await appendSection('ORDER DEFECT RATE - AFN (90-day)', odrRow);
-    await appendSection('LATE SHIPMENT RATE (30-day)', lateShipRow);
-    await appendSection('PRE-FULFILLMENT CANCELLATION RATE (30-day)', cancelRow);
-    await appendSection('POLICY WARNINGS', warningsRow);
-  }
 
   console.log(`  Done — "${TAB_NAME}" tab updated.`);
   console.log('\nView: https://docs.google.com/spreadsheets/d/1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4/edit');
