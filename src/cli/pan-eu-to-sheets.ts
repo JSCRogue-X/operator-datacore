@@ -148,6 +148,10 @@ async function main() {
 
   const allRows = parseTsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
+  if (allRows.length > 0) {
+    console.log(`  Report columns: ${Object.keys(allRows[0]).join(' | ')}`);
+    console.log(`  First row sample — MerchantSKU: "${allRows[0]['MerchantSKU']}" | ASIN: "${allRows[0]['ASIN']}"`);
+  }
 
   const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
   console.log(`  Rows matching current SKUs: ${activeRows.length}`);
