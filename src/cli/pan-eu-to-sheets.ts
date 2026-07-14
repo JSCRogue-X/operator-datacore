@@ -149,8 +149,9 @@ async function main() {
   const allRows = parseTsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
   if (allRows.length > 0) {
-    console.log(`  Report columns: ${Object.keys(allRows[0]).join(' | ')}`);
-    console.log(`  First row sample — MerchantSKU: "${allRows[0]['MerchantSKU']}" | ASIN: "${allRows[0]['ASIN']}"`);
+    const firstRow = allRows[0]!;
+    console.log(`  Report columns: ${Object.keys(firstRow).join(' | ')}`);
+    console.log(`  First row sample — MerchantSKU: "${firstRow['MerchantSKU']}" | ASIN: "${firstRow['ASIN']}"`);
   }
 
   const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
