@@ -119,3 +119,38 @@ export function parseTsv(rawText: string): Array<Record<string, string>> {
   }
   return rows;
 }
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current); current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+export function parseCsv(rawText: string): Array<Record<string, string>> {
+  const lines = rawText.replace(/\r\n/g, '\n').split('\n').filter((l) => l.length > 0);
+  if (lines.length === 0) return [];
+  const headers = parseCsvLine(lines[0]!);
+  const rows: Array<Record<string, string>> = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvLine(lines[i]!);
+    const row: Record<string, string> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]!] = (cells[j] ?? '').trim();
+    }
+    rows.push(row);
+  }
+  return rows;
+}

@@ -10,7 +10,7 @@ import { google } from 'googleapis';
 import { gunzipSync } from 'node:zlib';
 import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
-import { runReport, parseTsv } from '../lib/sp-api/reports.js';
+import { runReport, parseTsv, parseCsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = '1njxkOOPCPk1RCNJ0kTGpYQ_JTgz5d4wrLU2Uj_bC4vE';
 const TAB_NAME       = 'Pan EU';
@@ -146,13 +146,8 @@ async function main() {
 
   const currentSkus = await getCurrentSkus(spClient);
 
-  const allRows = parseTsv(rawText);
+  const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
-  if (allRows.length > 0) {
-    const firstRow = allRows[0]!;
-    console.log(`  Report columns: ${Object.keys(firstRow).join(' | ')}`);
-    console.log(`  First row sample — MerchantSKU: "${firstRow['MerchantSKU']}" | ASIN: "${firstRow['ASIN']}"`);
-  }
 
   const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
   console.log(`  Rows matching current SKUs: ${activeRows.length}`);
