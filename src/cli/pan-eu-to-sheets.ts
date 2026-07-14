@@ -122,9 +122,9 @@ async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
     });
     return result.rawText;
   } catch (err) {
-    const msg = String(err);
-    if (!msg.includes('429') && !msg.includes('QuotaExceeded') && !msg.includes('rate')) throw err;
-    console.warn('  Rate limited — falling back to most recent completed Pan-EU report...');
+    // Report creation, timeout, or rate-limit — always fall back to most recent completed report.
+    // This report is ~20MB and can sit in Amazon's queue for over an hour; cached is reliable.
+    console.warn(`  Fresh report failed (${(err as Error).message}) — falling back to most recent completed report...`);
     return fetchCachedReport(client, 'GET_PAN_EU_OFFER_STATUS', 'Pan-EU');
   }
 }
