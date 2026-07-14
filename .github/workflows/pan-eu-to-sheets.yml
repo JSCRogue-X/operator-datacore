@@ -11,7 +11,7 @@ permissions:
 jobs:
   pan-eu-to-sheets:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -23,6 +23,7 @@ jobs:
       SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
       SP_API_REGION: eu
       GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+      FORCE_CACHED: '1'
 
     steps:
       - uses: actions/checkout@v4
