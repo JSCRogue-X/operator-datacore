@@ -99,13 +99,13 @@ async function fetchListingsRawText(client: SpApiClient): Promise<string> {
   }
 }
 
-async function getCurrentSkus(client: SpApiClient): Promise<Set<string>> {
-  console.log('  Fetching current active SKUs from listings report...');
+async function getCurrentAsins(client: SpApiClient): Promise<Set<string>> {
+  console.log('  Fetching current active ASINs from listings report...');
   const rawText = await fetchListingsRawText(client);
   const rows = parseTsv(rawText);
-  const skus = new Set(rows.map(r => (r['seller-sku'] ?? '').trim()).filter(Boolean));
-  console.log(`  Found ${skus.size} current SKUs.`);
-  return skus;
+  const asins = new Set(rows.map(r => (r['asin1'] ?? '').trim()).filter(Boolean));
+  console.log(`  Found ${asins.size} current ASINs.`);
+  return asins;
 }
 
 async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
@@ -144,19 +144,17 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const currentSkus = await getCurrentSkus(spClient);
+  const currentAsins = await getCurrentAsins(spClient);
 
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
   if (allRows.length > 0) {
-    const firstRow = allRows[0]!;
-    console.log(`  Columns: ${Object.keys(firstRow).slice(0, 6).join(' | ')}`);
-    console.log(`  First 5 MerchantSKU values: ${allRows.slice(0, 5).map(r => JSON.stringify(r['MerchantSKU'])).join(', ')}`);
-    console.log(`  Sample currentSkus: ${[...currentSkus].slice(0, 5).join(', ')}`);
+    console.log(`  First 3 ASINs in report: ${allRows.slice(0, 3).map(r => r['ASIN']).join(', ')}`);
+    console.log(`  Sample currentAsins: ${[...currentAsins].slice(0, 3).join(', ')}`);
   }
 
-  const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
-  console.log(`  Rows matching current SKUs: ${activeRows.length}`);
+  const activeRows = allRows.filter(row => currentAsins.has((row['ASIN'] ?? '').trim()));
+  console.log(`  Rows matching current ASINs: ${activeRows.length}`);
 
 
   const outputRows = activeRows.map(row =>
