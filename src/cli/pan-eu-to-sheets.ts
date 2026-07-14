@@ -99,13 +99,13 @@ async function fetchListingsRawText(client: SpApiClient): Promise<string> {
   }
 }
 
-async function getCurrentAsins(client: SpApiClient): Promise<Set<string>> {
-  console.log('  Fetching current active ASINs from listings report...');
+async function getCurrentSkus(client: SpApiClient): Promise<Set<string>> {
+  console.log('  Fetching current active SKUs from listings report...');
   const rawText = await fetchListingsRawText(client);
   const rows = parseTsv(rawText);
-  const asins = new Set(rows.map(r => (r['asin1'] ?? '').trim()).filter(Boolean));
-  console.log(`  Found ${asins.size} current ASINs.`);
-  return asins;
+  const skus = new Set(rows.map(r => (r['seller-sku'] ?? '').trim()).filter(Boolean));
+  console.log(`  Found ${skus.size} current SKUs.`);
+  return skus;
 }
 
 async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
@@ -117,7 +117,7 @@ async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
     console.log('  Requesting fresh Pan-EU report...');
     const result = await runReport(client, {
       reportType: 'GET_PAN_EU_OFFER_STATUS',
-      marketplaceIds: ['A1F83G8C2ARO7P'],
+      marketplaceIds: ['A1PA6795UKMFR9'], // DE — Pan-EU FBA is managed from DE marketplace
       createRetries: 0,
     });
     return result.rawText;
@@ -144,19 +144,13 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const currentAsins = await getCurrentAsins(spClient);
+  const currentSkus = await getCurrentSkus(spClient);
 
-  console.log(`  Raw text sample: ${JSON.stringify(rawText.slice(0, 300))}`);
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
-  if (allRows.length > 0) {
-    console.log(`  First row keys: ${Object.keys(allRows[0]!).slice(0, 4).join(' | ')}`);
-    console.log(`  First row values: ${Object.values(allRows[0]!).slice(0, 4).join(' | ')}`);
-    console.log(`  Sample currentAsins: ${[...currentAsins].slice(0, 3).join(', ')}`);
-  }
 
-  const activeRows = allRows.filter(row => currentAsins.has((row['ASIN'] ?? '').trim()));
-  console.log(`  Rows matching current ASINs: ${activeRows.length}`);
+  const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
+  console.log(`  Rows matching current SKUs: ${activeRows.length}`);
 
 
   const outputRows = activeRows.map(row =>

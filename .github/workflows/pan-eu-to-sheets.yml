@@ -23,7 +23,6 @@ jobs:
       SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
       SP_API_REGION: eu
       GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
-      FORCE_CACHED: '1'
 
     steps:
       - uses: actions/checkout@v4
