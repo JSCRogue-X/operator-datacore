@@ -146,10 +146,12 @@ async function main() {
 
   const currentAsins = await getCurrentAsins(spClient);
 
+  console.log(`  Raw text sample: ${JSON.stringify(rawText.slice(0, 300))}`);
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
   if (allRows.length > 0) {
-    console.log(`  First 3 ASINs in report: ${allRows.slice(0, 3).map(r => r['ASIN']).join(', ')}`);
+    console.log(`  First row keys: ${Object.keys(allRows[0]!).slice(0, 4).join(' | ')}`);
+    console.log(`  First row values: ${Object.values(allRows[0]!).slice(0, 4).join(' | ')}`);
     console.log(`  Sample currentAsins: ${[...currentAsins].slice(0, 3).join(', ')}`);
   }
 
