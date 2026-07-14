@@ -269,21 +269,20 @@ async function main(): Promise<void> {
     const newDeliveryMs = Math.max(...etas);
     const currentDeliveryMs = deliverySubtask.due_date ? parseInt(deliverySubtask.due_date, 10) : null;
 
-    if (currentDeliveryMs && toDateStr(currentDeliveryMs) === toDateStr(newDeliveryMs)) {
-      console.log(`  Delivery Date unchanged: ${fmtDate(newDeliveryMs)}`);
+    if (currentDeliveryMs) {
+      console.log(`  Delivery Date already set (${fmtDate(currentDeliveryMs)}) — keeping static.`);
       continue;
     }
 
-    const prevStr = currentDeliveryMs ? fmtDate(currentDeliveryMs) : 'not set';
-    console.log(`  Delivery Date: ${prevStr} → ${fmtDate(newDeliveryMs)}`);
+    console.log(`  Delivery Date: not set → ${fmtDate(newDeliveryMs)}`);
 
     // Update "Delivery Date" subtask
     await setDueDate(deliverySubtask.id, newDeliveryMs);
 
     // Re-cascade FROM_DELIVERY dates, skipping completed subtasks
     const lines: string[] = [
-      `Delivery Date auto-updated from Amazon ETA: ${fmtDate(newDeliveryMs)} (was ${prevStr})\n`,
-      'Re-cascaded due dates:',
+      `Delivery Date set from Amazon ETA: ${fmtDate(newDeliveryMs)}\n`,
+      'Cascaded due dates:',
     ];
     let updated = 0;
 
