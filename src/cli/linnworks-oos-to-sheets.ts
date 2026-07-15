@@ -93,8 +93,9 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     if (!Array.isArray(data) || !data.length) break;
 
     // On the first page, log the Location object keys so we can confirm the field names.
-    if (pageNumber === 1 && data[0]?.StockLevels?.length) {
-      const firstLoc = data[0].StockLevels[0].Location as Record<string, unknown> | undefined;
+    if (pageNumber === 1) {
+      const firstLevel = data[0]?.StockLevels?.[0];
+      const firstLoc   = firstLevel?.Location as Record<string, unknown> | undefined;
       if (firstLoc) {
         console.log('  StockLevels[0].Location keys:', Object.keys(firstLoc).join(', '));
         console.log('  LocationName:', firstLoc['LocationName']);
