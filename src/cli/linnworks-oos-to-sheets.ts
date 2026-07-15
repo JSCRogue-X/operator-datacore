@@ -72,12 +72,12 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
       method: 'POST',
       headers: {
         Authorization:  session.token,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        entriesPerPage: pageSize,
-        pageNumber,
-      }),
+      body: new URLSearchParams({
+        entriesPerPage: String(pageSize),
+        pageNumber:     String(pageNumber),
+      }).toString(),
     });
 
     if (!resp.ok) throw new Error(`GetStockItemsFull failed: ${resp.status} ${await resp.text()}`);
