@@ -56,7 +56,7 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
   if (!locationId) throw new Error('LINNWORKS_LOCATION_KEY not set');
 
   const allItems: StockItem[] = [];
-  let startIndex = 0;
+  let pageNumber = 1;
   const pageSize = 200;
 
   while (true) {
@@ -67,9 +67,11 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        startIndex,
-        itemsCount: pageSize,
-        filters:    null,
+        entriesPerPage:       pageSize,
+        pageNumber,
+        dataRequirements:     ['StockLevels'],
+        loadCompositeParents: false,
+        loadVariationParents: false,
       }),
     });
 
@@ -78,14 +80,16 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     const data = await resp.json() as Array<{
       ItemNumber: string;
       ItemTitle:  string;
-      Locations?: Array<{ LocationId: string; Available: number }>;
+      Locations?: Array<{
+        Location?: { StockLocationId: string };
+        Available: number;
+      }>;
     }>;
 
-    if (!data.length) break;
+    if (!Array.isArray(data) || !data.length) break;
 
     for (const item of data) {
-      // Filter to the specified location; fall back to first location if no match
-      const loc = item.Locations?.find(l => l.LocationId === locationId)
+      const loc = item.Locations?.find(l => l.Location?.StockLocationId === locationId)
                ?? item.Locations?.[0];
       const available = loc?.Available ?? 0;
       if (available <= 0) {
@@ -98,7 +102,7 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     }
 
     if (data.length < pageSize) break;
-    startIndex += pageSize;
+    pageNumber++;
   }
 
   return allItems;
