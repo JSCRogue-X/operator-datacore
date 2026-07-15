@@ -81,37 +81,33 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     if (!resp.ok) throw new Error(`GetStockItemsFull failed: ${resp.status} ${await resp.text()}`);
 
     const data = await resp.json() as Array<{
-      StockItemId: string;
-      ItemNumber:  string;
-      ItemTitle:   string;
-      Locations?:  Array<{
-        Location?: { StockLocationId: string };
+      StockItemId:  string;
+      ItemNumber:   string;
+      ItemTitle:    string;
+      StockLevels?: Array<{
+        Location?: { StockLocationId: string; LocationName: string };
         Available: number;
       }>;
     }>;
 
     if (!Array.isArray(data) || !data.length) break;
 
-    // On the first page, log the structure of the first item to see what fields
-    // are available and find where stock level data actually lives.
-    if (pageNumber === 1 && data.length > 0) {
-      const sample = data[0] as unknown as Record<string, unknown>;
-      console.log('  Item keys:', Object.keys(sample).join(', '));
-      // Check all array fields for location/stock data
-      for (const [key, val] of Object.entries(sample)) {
-        if (Array.isArray(val) && val.length > 0) {
-          const entry = val[0] as Record<string, unknown>;
-          console.log(`  ${key}[0] keys:`, Object.keys(entry).join(', '));
-          const entryStr = JSON.stringify(entry);
-          console.log(`  ${key}[0] contains location key:`, entryStr.includes(locationId));
-        }
+    // On the first page, log the Location object keys so we can confirm the field names.
+    if (pageNumber === 1 && data[0]?.StockLevels?.length) {
+      const firstLoc = data[0].StockLevels[0].Location as Record<string, unknown> | undefined;
+      if (firstLoc) {
+        console.log('  StockLevels[0].Location keys:', Object.keys(firstLoc).join(', '));
+        console.log('  LocationName:', firstLoc['LocationName']);
       }
     }
 
     for (const item of data) {
-      // Strict filter: only include items where Ogden Fulfilment location has 0 stock.
-      // No fallback — items not at this location are ignored.
-      const loc = item.Locations?.find(l => l.Location?.StockLocationId === locationId);
+      // Match location by GUID (StockLocationId) OR by name (LocationName).
+      // This handles both a stored GUID and a stored location name like "Ogden Fulfilment".
+      const loc = item.StockLevels?.find(l =>
+        l.Location?.StockLocationId === locationId ||
+        l.Location?.LocationName     === locationId,
+      );
       if (!loc) continue;
       if (loc.Available > 0) continue;
 
