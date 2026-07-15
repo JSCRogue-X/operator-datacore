@@ -82,10 +82,11 @@ async function fetchOosItems(session: LinnworksSession): Promise<{ items: StockI
     if (!resp.ok) throw new Error(`GetStockItemsFull failed: ${resp.status} ${await resp.text()}`);
 
     const data = await resp.json() as Array<{
-      StockItemId:  string;
-      ItemNumber:   string;
-      ItemTitle:    string;
-      StockLevels?: Array<{
+      StockItemId:   string;
+      ItemNumber:    string;
+      ItemTitle:     string;
+      CategoryName?: string;
+      StockLevels?:  Array<{
         Location?: { StockLocationId: string; LocationName: string };
         Available: number;
       }>;
@@ -93,11 +94,9 @@ async function fetchOosItems(session: LinnworksSession): Promise<{ items: StockI
 
     if (!Array.isArray(data) || !data.length) break;
 
-    if (pageNumber === 1 && data.length > 0) {
-      console.log(`  Stock item keys: ${Object.keys(data[0]!).join(', ')}`);
-    }
-
     for (const item of data) {
+      if (item.CategoryName !== 'SPINCARE') continue;
+
       // Match location by GUID (StockLocationId) OR by name (LocationName).
       const loc = item.StockLevels?.find(l =>
         l.Location?.StockLocationId === locationKey ||
