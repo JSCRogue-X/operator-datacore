@@ -128,11 +128,15 @@ async function fetchOosItems(session: LinnworksSession): Promise<{ items: StockI
 
 // Fetches the date when a stock item first went OOS in its current OOS streak.
 // Returns null if history is unavailable or can't be parsed.
+// Returns:
+//   string  — real OOS date (item has had stock, currently OOS)
+//   null    — history unavailable, include with today's date as fallback
+//   false   — confirmed never stocked at this location, exclude from report
 async function findFirstOosDate(
   session:     LinnworksSession,
   stockItemId: string,
   locationId:  string,
-): Promise<string | null> {
+): Promise<string | null | false> {
   try {
     const url = new URL(`${session.server}/api/Stock/GetItemChangesHistory`);
     url.searchParams.set('stockItemId', stockItemId);
@@ -161,7 +165,9 @@ async function findFirstOosDate(
     // Walk newest-first through history entries.
     // Track the last-seen 0-stock date; stop when we find a positive-stock entry.
     // That boundary marks the start of the current OOS streak.
+    // If no positive-stock entry is ever found, the item has never been stocked here.
     let lastZeroDate: string | null = null;
+    let everHadStock = false;
 
     for (const entry of entries) {
       const rawDate = entry['Date'] as string | undefined;
@@ -171,10 +177,14 @@ async function findFirstOosDate(
       const level = entry['Level'] as number | undefined;
       if (level === undefined || typeof level !== 'number') continue;
 
-      if (level > 0) break; // Found positive stock — OOS streak started at lastZeroDate
+      if (level > 0) {
+        everHadStock = true;
+        break; // OOS streak started at lastZeroDate
+      }
       lastZeroDate = rawDate;
     }
 
+    if (!everHadStock) return false; // Never stocked at this location — exclude from report
     if (!lastZeroDate) return null;
 
     // Format the ISO date string to UK format (e.g. "12 Jul 2026")
@@ -245,16 +255,24 @@ async function main() {
   let historyLookups = 0;
 
   let historyResolved = 0;
+  let historyExcluded = 0;
 
   for (const item of oosItems) {
     let firstSeen = firstSeenMap.get(item.SKU);
 
     if (!firstSeen) {
       // New OOS item — look up actual OOS date from Linnworks history using the resolved location GUID
-      const historyDate = await findFirstOosDate(session, item.stockItemId, resolvedLocationId);
-      firstSeen = historyDate ?? today;
+      const historyResult = await findFirstOosDate(session, item.stockItemId, resolvedLocationId);
       historyLookups++;
-      if (historyDate) historyResolved++;
+
+      if (historyResult === false) {
+        // Never stocked at Ogden Fulfilment — exclude from report
+        historyExcluded++;
+        continue;
+      }
+
+      firstSeen = historyResult ?? today;
+      if (historyResult) historyResolved++;
     }
 
     const days = daysSince(firstSeen);
@@ -262,7 +280,7 @@ async function main() {
   }
 
   if (historyLookups > 0) {
-    console.log(`  History lookups: ${historyLookups} new item(s), ${historyResolved} with a real OOS date, ${historyLookups - historyResolved} defaulted to today.`);
+    console.log(`  History lookups: ${historyLookups} new item(s), ${historyResolved} with a real OOS date, ${historyLookups - historyResolved - historyExcluded} defaulted to today, ${historyExcluded} excluded (never stocked).`);
   }
 
   // Sort by days since OOS descending (longest OOS first)
