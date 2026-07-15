@@ -93,6 +93,10 @@ async function fetchOosItems(session: LinnworksSession): Promise<{ items: StockI
 
     if (!Array.isArray(data) || !data.length) break;
 
+    if (pageNumber === 1 && data.length > 0) {
+      console.log(`  Stock item keys: ${Object.keys(data[0]!).join(', ')}`);
+    }
+
     for (const item of data) {
       // Match location by GUID (StockLocationId) OR by name (LocationName).
       const loc = item.StockLevels?.find(l =>
