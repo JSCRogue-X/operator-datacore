@@ -10,7 +10,7 @@ import { google } from 'googleapis';
 import { gunzipSync } from 'node:zlib';
 import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
-import { runReport, parseCsv } from '../lib/sp-api/reports.js';
+import { runReport, parseTsv, parseCsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = '1njxkOOPCPk1RCNJ0kTGpYQ_JTgz5d4wrLU2Uj_bC4vE';
 const TAB_NAME       = 'Pan EU';
@@ -132,7 +132,10 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const allRows = parseCsv(rawText);
+  const firstLine = rawText.split('\n')[0] ?? '';
+  const isTsv = firstLine.includes('\t');
+  console.log(`  Detected format: ${isTsv ? 'TSV' : 'CSV'}`);
+  const allRows = isTsv ? parseTsv(rawText) : parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
 
   const activeRows = allRows.filter(row => SPINCARE_ASINS.has((row['ASIN'] ?? '').trim()));
