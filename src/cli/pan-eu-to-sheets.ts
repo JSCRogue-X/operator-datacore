@@ -10,7 +10,7 @@ import { google } from 'googleapis';
 import { gunzipSync } from 'node:zlib';
 import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
-import { runReport, parseTsv, parseCsv } from '../lib/sp-api/reports.js';
+import { runReport, parseCsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = '1njxkOOPCPk1RCNJ0kTGpYQ_JTgz5d4wrLU2Uj_bC4vE';
 const TAB_NAME       = 'Pan EU';
@@ -59,6 +59,18 @@ const OFFER_COLUMNS = new Set([
 
 const NO_LISTING_VALUES = new Set(['no listing', 'no offer required', 'hazmat', '']);
 
+// Current active SPINCARE ASINs — update when products are added or removed
+const SPINCARE_ASINS = new Set([
+  'B0D6GWJD45', 'B017K5D518', 'B00XSM1CM2', 'B08F5LHNFS', 'B08F5KLMS3',
+  'B076P8BDSS', 'B07CWVWNYR', 'B076YJ9T38', 'B076YK7836', 'B08XM3PV8Q',
+  'B0937M9GFQ', 'B0937JF77Y', 'B09ZF9QXSF', 'B09ZFBD8ZZ', 'B071W7CX1W',
+  'B072PZYKC5', 'B079HXR4V4', 'B079J12K5C', 'B08XM6D7JW', 'B00KDFNHMU',
+  'B0FXH31JS8', 'B00XSP8N12', 'B0F4KQVXYP', 'B0GSBFLS4D', 'B0FZCS6L7N',
+  'B09SGLLVK9', 'B089D1X4TX', 'B0D45H8XZS', 'B0D45H8G8F', 'B09SGL4S1X',
+  'B07RYVSDF4', 'B07CWYD5PS', 'B093C7WVBH', 'B07RZTPX5G', 'B01AKAHF52',
+  'B0H69Q1K1N',
+]);
+
 async function fetchCachedReport(client: SpApiClient, reportType: string, label: string): Promise<string> {
   const list = await client.request<{ reports: Array<{ reportDocumentId: string; processingEndTime: string }> }>({
     method: 'GET',
@@ -83,30 +95,6 @@ async function fetchCachedReport(client: SpApiClient, reportType: string, label:
     : buf.toString('utf8');
 }
 
-async function fetchListingsRawText(client: SpApiClient): Promise<string> {
-  try {
-    const result = await runReport(client, {
-      reportType: 'GET_MERCHANT_LISTINGS_ALL_DATA',
-      marketplaceIds: ['A1F83G8C2ARO7P'],
-      createRetries: 0,
-    });
-    return result.rawText;
-  } catch (err) {
-    const msg = String(err);
-    if (!msg.includes('429') && !msg.includes('QuotaExceeded') && !msg.includes('rate')) throw err;
-    console.warn('  Rate limited on listings report — falling back to most recent completed...');
-    return fetchCachedReport(client, 'GET_MERCHANT_LISTINGS_ALL_DATA', 'listings');
-  }
-}
-
-async function getCurrentAsins(client: SpApiClient): Promise<Set<string>> {
-  console.log('  Fetching current active ASINs from listings report...');
-  const rawText = await fetchListingsRawText(client);
-  const rows = parseTsv(rawText);
-  const asins = new Set(rows.map(r => (r['asin1'] ?? '').trim()).filter(Boolean));
-  console.log(`  Found ${asins.size} current ASINs.`);
-  return asins;
-}
 
 async function fetchMostRecentReport(client: SpApiClient): Promise<string> {
   if (process.env.FORCE_CACHED === '1') {
@@ -144,13 +132,11 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const currentAsins = await getCurrentAsins(spClient);
-
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
 
-  const activeRows = allRows.filter(row => currentAsins.has((row['ASIN'] ?? '').trim()));
-  console.log(`  Rows matching current ASINs: ${activeRows.length}`);
+  const activeRows = allRows.filter(row => SPINCARE_ASINS.has((row['ASIN'] ?? '').trim()));
+  console.log(`  Rows matching SPINCARE ASINs: ${activeRows.length}`);
 
   const outputRows = activeRows.map(row =>
     HEADERS.map(h => {
