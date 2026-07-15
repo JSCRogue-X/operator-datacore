@@ -61,11 +61,9 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
 
   while (true) {
     const params = new URLSearchParams({
-      startIndex:        String(startIndex),
-      itemsCount:        String(pageSize),
-      filters:           '[]',
-      getDataByLocation: 'true',
-      locationId,
+      startIndex: String(startIndex),
+      itemsCount: String(pageSize),
+      filters:    '[]',
     });
 
     const resp = await fetch(`${session.server}/api/Stock/GetStockItemsFull`, {
@@ -82,13 +80,16 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     const data = await resp.json() as Array<{
       ItemNumber: string;
       ItemTitle:  string;
-      Locations?: Array<{ Available: number }>;
+      Locations?: Array<{ LocationId: string; Available: number }>;
     }>;
 
     if (!data.length) break;
 
     for (const item of data) {
-      const available = item.Locations?.[0]?.Available ?? 0;
+      // Filter to the specified location; fall back to first location if no match
+      const loc = item.Locations?.find(l => l.LocationId === locationId)
+               ?? item.Locations?.[0];
+      const available = loc?.Available ?? 0;
       if (available <= 0) {
         allItems.push({
           SKU:       item.ItemNumber,
