@@ -8,6 +8,12 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ### 15 July 2026 (continued)
 
+**Linnworks OOS → Google Sheets — category + never-stocked filters added (confirmed working)**
+- Final result: 5 items in sheet (was 33 before filters)
+- Filter 1: `CategoryName === 'SPINCARE'` — top-level field on stock item response
+- Filter 2: Never stocked — excluded if `GetItemChangesHistory` contains no `Level > 0` entry
+- Both filters applied from scratch on a cleared sheet — dates confirmed accurate (oldest: 10 Jan 2024)
+
 **Linnworks OOS → Google Sheets — history dates now fully working**
 - 33/33 items received real historical OOS dates from `GetItemChangesHistory`
 - Root cause of history returning null: two separate bugs fixed in sequence:
