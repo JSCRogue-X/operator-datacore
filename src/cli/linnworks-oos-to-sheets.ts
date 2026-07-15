@@ -92,14 +92,13 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
 
     if (!Array.isArray(data) || !data.length) break;
 
-    // On the first page, log the Location object keys so we can confirm the field names.
-    if (pageNumber === 1) {
-      const firstLevel = data[0]?.StockLevels?.[0];
-      const firstLoc   = firstLevel?.Location as Record<string, unknown> | undefined;
-      if (firstLoc) {
-        console.log('  StockLevels[0].Location keys:', Object.keys(firstLoc).join(', '));
-        console.log('  LocationName:', firstLoc['LocationName']);
-      }
+    // On the first page, log all location names for the first item so we can
+    // confirm which warehouse names exist and pick the right one.
+    if (pageNumber === 1 && data[0]?.StockLevels?.length) {
+      const names = data[0].StockLevels
+        .map(l => (l.Location as Record<string, unknown> | undefined)?.['LocationName'])
+        .filter(Boolean);
+      console.log('  All locations on first item:', names.join(', '));
     }
 
     for (const item of data) {
