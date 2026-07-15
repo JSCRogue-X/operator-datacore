@@ -6,6 +6,22 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 15 July 2026 (continued)
+
+**Linnworks OOS → Google Sheets — now working**
+- Script writes 86 OOS items to "IH OOS" tab in sheet `1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ`
+- Root cause of 400 errors: `GetStockItemsFull` requires ALL documented parameters to be present, even optional ones — omitting any caused "The request is invalid."
+- Required params: `keyword`, `loadCompositeParents`, `loadVariationParents`, `entriesPerPage`, `pageNumber`, `dataRequirements`, `searchTypes`
+- Auth confirmed working (session token valid for eu-ext.linnworks.net)
+- Tracks "Days Since OOS" and "First Seen OOS" across runs — first run sets all dates to today
+- Scheduled weekly Monday 7am UTC
+- Debug helpers (`testSession`, request body logging) removed after confirmation
+
+**Files changed**
+- `src/cli/linnworks-oos-to-sheets.ts` — finalised working request format, debug code removed
+
+---
+
 ### 15 July 2026
 
 **Pan-EU Status → Sheets — finally working**
@@ -37,6 +53,5 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 **Next steps**
 - Delete `debug-paneu-raw.ts` and its workflow once confirmed stable
-- Linnworks OOS report — waiting on Linnworks developer API credentials from Jon
 - Dropbox API task — waiting to confirm sales team want it; need folder path and Excel column layout
 - Update `SPINCARE_ASINS` in `pan-eu-to-sheets.ts` whenever new products are added
