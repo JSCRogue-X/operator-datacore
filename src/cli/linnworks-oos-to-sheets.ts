@@ -92,16 +92,20 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
 
     if (!Array.isArray(data) || !data.length) break;
 
-    // On the first page, log the structure of the first location object so we can
-    // verify the field names and confirm the location key matches.
-    if (pageNumber === 1 && data[0]?.Locations?.length) {
-      const sample = data[0].Locations[0] as Record<string, unknown>;
-      console.log('  Location object keys:', Object.keys(sample).join(', '));
-      if (sample['Location'] && typeof sample['Location'] === 'object') {
-        console.log('  Location.Location keys:', Object.keys(sample['Location'] as object).join(', '));
+    // On the first page, log the structure of the first item to see what fields
+    // are available and find where stock level data actually lives.
+    if (pageNumber === 1 && data.length > 0) {
+      const sample = data[0] as unknown as Record<string, unknown>;
+      console.log('  Item keys:', Object.keys(sample).join(', '));
+      // Check all array fields for location/stock data
+      for (const [key, val] of Object.entries(sample)) {
+        if (Array.isArray(val) && val.length > 0) {
+          const entry = val[0] as Record<string, unknown>;
+          console.log(`  ${key}[0] keys:`, Object.keys(entry).join(', '));
+          const entryStr = JSON.stringify(entry);
+          console.log(`  ${key}[0] contains location key:`, entryStr.includes(locationId));
+        }
       }
-      const locStr = JSON.stringify(sample);
-      console.log('  Location GUID matches:', locStr.includes(locationId));
     }
 
     for (const item of data) {
