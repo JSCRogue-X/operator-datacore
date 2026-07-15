@@ -22,13 +22,17 @@ interface LinnworksSession {
 }
 
 async function getLinnworksSession(): Promise<LinnworksSession> {
-  const appToken = process.env.LINNWORKS_API_TOKEN;
-  if (!appToken) throw new Error('LINNWORKS_API_TOKEN not set');
+  const appId     = process.env.LINNWORKS_APP_ID;
+  const appSecret = process.env.LINNWORKS_APP_SECRET;
+  const appToken  = process.env.LINNWORKS_INSTALL_TOKEN;
+  if (!appId || !appSecret || !appToken) {
+    throw new Error('LINNWORKS_APP_ID, LINNWORKS_APP_SECRET, and LINNWORKS_INSTALL_TOKEN must all be set');
+  }
 
-  const resp = await fetch('https://api.linnworks.net/api/Auth/AuthorizeByToken', {
+  const resp = await fetch('https://api.linnworks.net/api/Auth/AuthorizeByApplication', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ Token: appToken }),
+    body: new URLSearchParams({ ApplicationId: appId, ApplicationSecret: appSecret, Token: appToken }),
   });
 
   if (!resp.ok) {
