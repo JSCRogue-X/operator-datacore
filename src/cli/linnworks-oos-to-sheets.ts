@@ -63,6 +63,7 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     const params = new URLSearchParams({
       startIndex:        String(startIndex),
       itemsCount:        String(pageSize),
+      filters:           '[]',
       getDataByLocation: 'true',
       locationId,
     });
