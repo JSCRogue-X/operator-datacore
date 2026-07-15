@@ -25,10 +25,10 @@ async function getLinnworksSession(): Promise<LinnworksSession> {
   const appToken = process.env.LINNWORKS_API_TOKEN;
   if (!appToken) throw new Error('LINNWORKS_API_TOKEN not set');
 
-  const resp = await fetch('https://api.linnworks.net/api/Auth/AuthorizeByApplicationToken', {
+  const resp = await fetch('https://api.linnworks.net/api/Auth/AuthorizeByToken', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ applicationToken: appToken }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ Token: appToken }),
   });
 
   if (!resp.ok) {
