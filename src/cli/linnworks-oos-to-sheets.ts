@@ -68,16 +68,24 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
   const pageSize = 200;
 
   while (true) {
+    const reqBody = JSON.stringify({
+      keyword:              '',
+      loadCompositeParents: false,
+      loadVariationParents: false,
+      entriesPerPage:       pageSize,
+      pageNumber,
+      dataRequirements:     ['StockLevels'],
+      searchTypes:          ['SKU', 'Title', 'Barcode'],
+    });
+    console.log(`  Request body: ${reqBody}`);
+
     const resp = await fetch(`${session.server}/api/Stock/GetStockItemsFull`, {
       method: 'POST',
       headers: {
         Authorization:  session.token,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: new URLSearchParams({
-        entriesPerPage: String(pageSize),
-        pageNumber:     String(pageNumber),
-      }).toString(),
+      body: reqBody,
     });
 
     if (!resp.ok) throw new Error(`GetStockItemsFull failed: ${resp.status} ${await resp.text()}`);
