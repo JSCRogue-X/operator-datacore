@@ -1,8 +1,6 @@
 name: Linnworks OOS → Sheets
 
 on:
-  schedule:
-    - cron: '0 7 * * 1'  # Every Monday at 7am UTC
   workflow_dispatch:
 
 permissions:
