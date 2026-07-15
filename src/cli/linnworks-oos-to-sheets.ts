@@ -158,20 +158,17 @@ async function findFirstOosDate(
 
     if (!entries.length) return null;
 
-    // Log field names from the first entry to confirm shape (once per run, on the first item that has entries)
-    console.log(`  History entry keys (sample): ${Object.keys(entries[0]!).join(', ')}`);
-
     // Walk newest-first through history entries.
     // Track the last-seen 0-stock date; stop when we find a positive-stock entry.
     // That boundary marks the start of the current OOS streak.
     let lastZeroDate: string | null = null;
 
     for (const entry of entries) {
-      const rawDate = (entry['Date'] ?? entry['RecordedDate'] ?? entry['ChangeDate']) as string | undefined;
+      const rawDate = entry['Date'] as string | undefined;
       if (!rawDate) continue;
 
-      // Try common Linnworks field names for stock level after change
-      const level = (entry['StockLevel'] ?? entry['Available'] ?? entry['Qty']) as number | undefined;
+      // Linnworks history uses "Level" for the stock level after the change
+      const level = entry['Level'] as number | undefined;
       if (level === undefined || typeof level !== 'number') continue;
 
       if (level > 0) break; // Found positive stock — OOS streak started at lastZeroDate
