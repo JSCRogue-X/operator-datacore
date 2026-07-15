@@ -52,11 +52,12 @@ interface StockItem {
   Available:   number;
 }
 
-async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
-  const locationId = process.env.LINNWORKS_LOCATION_KEY;
-  if (!locationId) throw new Error('LINNWORKS_LOCATION_KEY not set');
+async function fetchOosItems(session: LinnworksSession): Promise<{ items: StockItem[]; resolvedLocationId: string }> {
+  const locationKey = process.env.LINNWORKS_LOCATION_KEY;
+  if (!locationKey) throw new Error('LINNWORKS_LOCATION_KEY not set');
 
   const allItems: StockItem[] = [];
+  let resolvedLocationId = locationKey; // updated to actual GUID on first match
   let pageNumber = 1;
   const pageSize = 200;
 
@@ -94,12 +95,18 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
 
     for (const item of data) {
       // Match location by GUID (StockLocationId) OR by name (LocationName).
-      // This handles both a stored GUID and a stored location name like "Ogden Fulfilment".
       const loc = item.StockLevels?.find(l =>
-        l.Location?.StockLocationId === locationId ||
-        l.Location?.LocationName     === locationId,
+        l.Location?.StockLocationId === locationKey ||
+        l.Location?.LocationName     === locationKey,
       );
       if (!loc) continue;
+
+      // Capture the actual GUID from the first matched location entry.
+      // LINNWORKS_LOCATION_KEY may be a name ("Ogden Fulfilment"); the history API needs the GUID.
+      if (resolvedLocationId === locationKey && loc.Location?.StockLocationId) {
+        resolvedLocationId = loc.Location.StockLocationId;
+      }
+
       if (loc.Available > 0) continue;
 
       allItems.push({
@@ -114,7 +121,7 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
     pageNumber++;
   }
 
-  return allItems;
+  return { items: allItems, resolvedLocationId };
 }
 
 // ── Linnworks stock history ────────────────────────────────────────────────────
@@ -136,7 +143,10 @@ async function findFirstOosDate(
     const resp = await fetch(url.toString(), {
       headers: { Authorization: session.token },
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.log(`  History API ${resp.status} for ${stockItemId.slice(0, 8)}...`);
+      return null;
+    }
 
     const raw = await resp.json() as unknown;
 
@@ -148,19 +158,15 @@ async function findFirstOosDate(
 
     if (!entries.length) return null;
 
+    // Log field names from the first entry to confirm shape (once per run, on the first item that has entries)
+    console.log(`  History entry keys (sample): ${Object.keys(entries[0]!).join(', ')}`);
+
     // Walk newest-first through history entries.
     // Track the last-seen 0-stock date; stop when we find a positive-stock entry.
     // That boundary marks the start of the current OOS streak.
     let lastZeroDate: string | null = null;
-    let loggedKeys = false;
 
     for (const entry of entries) {
-      // Log field names from the first entry once to help diagnose unexpected shapes
-      if (!loggedKeys) {
-        console.log(`  History entry keys: ${Object.keys(entry).join(', ')}`);
-        loggedKeys = true;
-      }
-
       const rawDate = (entry['Date'] ?? entry['RecordedDate'] ?? entry['ChangeDate']) as string | undefined;
       if (!rawDate) continue;
 
@@ -203,16 +209,14 @@ async function main() {
   console.log('Linnworks OOS → Google Sheets');
   console.log('------------------------------');
 
-  const locationId = process.env.LINNWORKS_LOCATION_KEY;
-  if (!locationId) throw new Error('LINNWORKS_LOCATION_KEY not set');
-
   console.log('Authenticating with Linnworks...');
   const session = await getLinnworksSession();
   console.log(`  Session token obtained. Server: ${session.server}`);
 
   console.log('Fetching OOS stock items (Ogden Fulfilment only)...');
-  const oosItems = await fetchOosItems(session);
+  const { items: oosItems, resolvedLocationId } = await fetchOosItems(session);
   console.log(`  Found ${oosItems.length} item(s) with 0 available stock at Ogden Fulfilment.`);
+  console.log(`  Resolved location GUID: ${resolvedLocationId}`);
 
   // ── Google Sheets ──────────────────────────────────────────────────────────
   const auth = new google.auth.GoogleAuth({
@@ -243,14 +247,17 @@ async function main() {
   const outputRows: string[][] = [];
   let historyLookups = 0;
 
+  let historyResolved = 0;
+
   for (const item of oosItems) {
     let firstSeen = firstSeenMap.get(item.SKU);
 
     if (!firstSeen) {
-      // New OOS item — try to find the real first-OOS date from history
-      const historyDate = await findFirstOosDate(session, item.stockItemId, locationId);
+      // New OOS item — look up actual OOS date from Linnworks history using the resolved location GUID
+      const historyDate = await findFirstOosDate(session, item.stockItemId, resolvedLocationId);
       firstSeen = historyDate ?? today;
       historyLookups++;
+      if (historyDate) historyResolved++;
     }
 
     const days = daysSince(firstSeen);
@@ -258,7 +265,7 @@ async function main() {
   }
 
   if (historyLookups > 0) {
-    console.log(`  Looked up history for ${historyLookups} new OOS item(s).`);
+    console.log(`  History lookups: ${historyLookups} new item(s), ${historyResolved} with a real OOS date, ${historyLookups - historyResolved} defaulted to today.`);
   }
 
   // Sort by days since OOS descending (longest OOS first)
