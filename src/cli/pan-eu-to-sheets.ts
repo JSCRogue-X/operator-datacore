@@ -144,21 +144,10 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const currentSkus = await getCurrentSkus(spClient);
-
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
-  if (allRows.length > 0) {
-    console.log(`  Report columns: ${Object.keys(allRows[0]!).join(' | ')}`);
-    console.log(`  Sample report MerchantSKU values: ${allRows.slice(0, 5).map(r => r['MerchantSKU'] ?? '(missing)').join(', ')}`);
-    console.log(`  Sample listings SKUs: ${[...currentSkus].slice(0, 5).join(', ')}`);
-  }
 
-  const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
-  console.log(`  Rows matching current SKUs: ${activeRows.length}`);
-
-
-  const outputRows = activeRows.map(row =>
+  const outputRows = allRows.map(row =>
     HEADERS.map(h => {
       const raw = row[TSV_MAP[h]!] ?? '';
       if (OFFER_COLUMNS.has(h)) return NO_LISTING_VALUES.has(raw.trim().toLowerCase()) ? 'No Listing' : 'Listing';
