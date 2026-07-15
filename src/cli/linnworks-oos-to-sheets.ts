@@ -51,6 +51,14 @@ interface StockItem {
   Available: number;
 }
 
+async function testSession(session: LinnworksSession): Promise<void> {
+  const resp = await fetch(`${session.server}/api/ReturnsRefunds/GetWarehouseLocations`, {
+    method: 'GET',
+    headers: { Authorization: session.token },
+  });
+  console.log(`  Session test (GetWarehouseLocations): ${resp.status}`);
+}
+
 async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
   const locationId = process.env.LINNWORKS_LOCATION_KEY;
   if (!locationId) throw new Error('LINNWORKS_LOCATION_KEY not set');
@@ -67,11 +75,8 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        entriesPerPage:       pageSize,
+        entriesPerPage: pageSize,
         pageNumber,
-        dataRequirements:     ['StockLevels'],
-        loadCompositeParents: false,
-        loadVariationParents: false,
       }),
     });
 
@@ -132,6 +137,8 @@ async function main() {
   const session = await getLinnworksSession();
   console.log(`  Session token obtained. Server: ${session.server}`);
 
+  console.log('Testing session...');
+  await testSession(session);
   console.log('Fetching OOS stock items...');
   const oosItems = await fetchOosItems(session);
   console.log(`  Found ${oosItems.length} item(s) with 0 available stock.`);
