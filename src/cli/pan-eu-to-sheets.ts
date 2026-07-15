@@ -148,6 +148,11 @@ async function main() {
 
   const allRows = parseCsv(rawText);
   console.log(`  Total rows in report: ${allRows.length}`);
+  if (allRows.length > 0) {
+    console.log(`  Report columns: ${Object.keys(allRows[0]!).join(' | ')}`);
+    console.log(`  Sample report MerchantSKU values: ${allRows.slice(0, 5).map(r => r['MerchantSKU'] ?? '(missing)').join(', ')}`);
+    console.log(`  Sample listings SKUs: ${[...currentSkus].slice(0, 5).join(', ')}`);
+  }
 
   const activeRows = allRows.filter(row => currentSkus.has((row['MerchantSKU'] ?? '').trim()));
   console.log(`  Rows matching current SKUs: ${activeRows.length}`);
