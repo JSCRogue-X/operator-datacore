@@ -132,10 +132,8 @@ async function main() {
   console.log('Fetching Pan-EU report...');
   const rawText = await fetchMostRecentReport(spClient);
 
-  const firstLine = rawText.split('\n')[0] ?? '';
-  const isTsv = firstLine.includes('\t');
-  console.log(`  Detected format: ${isTsv ? 'TSV' : 'CSV'}`);
-  const allRows = isTsv ? parseTsv(rawText) : parseCsv(rawText);
+  const cleanText = rawText.replace(/^﻿/, ''); // strip UTF-8 BOM so first column key is 'ASIN' not '﻿ASIN'
+  const allRows = parseTsv(cleanText);
   console.log(`  Total rows in report: ${allRows.length}`);
 
   const activeRows = allRows.filter(row => SPINCARE_ASINS.has((row['ASIN'] ?? '').trim()));
