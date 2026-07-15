@@ -8,17 +8,24 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ### 15 July 2026 (continued)
 
-**Linnworks OOS → Google Sheets — now working**
-- Script writes 86 OOS items to "IH OOS" tab in sheet `1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ`
+**Linnworks OOS → Google Sheets — history dates now fully working**
+- 33/33 items received real historical OOS dates from `GetItemChangesHistory`
+- Root cause of history returning null: two separate bugs fixed in sequence:
+  1. `LINNWORKS_LOCATION_KEY` is stored as a name ("Ogden Fulfilment") — history API needs the GUID. Fixed by capturing `StockLocationId` from the first matched `StockLevels` entry in `fetchOosItems` and passing that GUID to `findFirstOosDate`.
+  2. History entry field for stock level is `Level`, not `StockLevel`/`Available`/`Qty`.
+- Confirmed field names: `StockItemId`, `Date`, `Level`, `StockValue`, `Note`, `ChangeQty`, `ChangeValue`
+- Final log: "33 new item(s), 33 with a real OOS date, 0 defaulted to today"
+
+**Linnworks OOS → Google Sheets — initial working version**
+- Script writes 33 OOS items to "IH OOS" tab in sheet `1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ`
 - Root cause of 400 errors: `GetStockItemsFull` requires ALL documented parameters to be present, even optional ones — omitting any caused "The request is invalid."
 - Required params: `keyword`, `loadCompositeParents`, `loadVariationParents`, `entriesPerPage`, `pageNumber`, `dataRequirements`, `searchTypes`
 - Auth confirmed working (session token valid for eu-ext.linnworks.net)
-- Tracks "Days Since OOS" and "First Seen OOS" across runs — first run sets all dates to today
+- Tracks "Days Since OOS" and "First Seen OOS" across runs
 - Scheduled weekly Monday 7am UTC
-- Debug helpers (`testSession`, request body logging) removed after confirmation
 
 **Files changed**
-- `src/cli/linnworks-oos-to-sheets.ts` — finalised working request format, debug code removed
+- `src/cli/linnworks-oos-to-sheets.ts` — history GUID resolution + correct Level field name
 
 ---
 
