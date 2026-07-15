@@ -92,6 +92,18 @@ async function fetchOosItems(session: LinnworksSession): Promise<StockItem[]> {
 
     if (!Array.isArray(data) || !data.length) break;
 
+    // On the first page, log the structure of the first location object so we can
+    // verify the field names and confirm the location key matches.
+    if (pageNumber === 1 && data[0]?.Locations?.length) {
+      const sample = data[0].Locations[0] as Record<string, unknown>;
+      console.log('  Location object keys:', Object.keys(sample).join(', '));
+      if (sample['Location'] && typeof sample['Location'] === 'object') {
+        console.log('  Location.Location keys:', Object.keys(sample['Location'] as object).join(', '));
+      }
+      const locStr = JSON.stringify(sample);
+      console.log('  Location GUID matches:', locStr.includes(locationId));
+    }
+
     for (const item of data) {
       // Strict filter: only include items where Ogden Fulfilment location has 0 stock.
       // No fallback — items not at this location are ignored.
