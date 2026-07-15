@@ -1,0 +1,40 @@
+name: Linnworks OOS → Sheets
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'  # Every Monday at 7am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linnworks-oos-to-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      LINNWORKS_API_TOKEN: ${{ secrets.LINNWORKS_API_TOKEN }}
+      LINNWORKS_LOCATION_KEY: ${{ secrets.LINNWORKS_LOCATION_KEY }}
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Linnworks OOS → Sheets
+        run: npx tsx src/cli/linnworks-oos-to-sheets.ts
