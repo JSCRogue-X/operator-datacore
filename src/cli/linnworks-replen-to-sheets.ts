@@ -237,7 +237,7 @@ async function main() {
 
   const outputRows = itemsWithLoc
     .map(({ item, loc }) => buildRow(item, loc))
-    .sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
+    .sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')));
 
   // ── Google Sheets ──────────────────────────────────────────────────────
   const auth = new google.auth.GoogleAuth({
