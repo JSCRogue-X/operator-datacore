@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import { google } from 'googleapis';
+import pLimit from 'p-limit';
 
 const SPREADSHEET_ID = '1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ';
 const TAB_NAME       = '30 Day Sales';
@@ -49,21 +50,19 @@ interface OrderItem {
 }
 
 interface ProcessedOrder {
+  pkOrderID?:      string;
   nOrderId?:       number;
-  dReceievedDate?: string;
+  dReceivedDate?:  string;
   Source?:         string;
-  SubSource?:      string;
-  Items?:          OrderItem[];
   [key: string]:   unknown;
 }
 
-// ── Fetch ───────────────────────────────────────────────────────────────────
+// ── Fetch orders ─────────────────────────────────────────────────────────────
 
 async function fetchOrders(session: LinnworksSession, fromDate: string, toDate: string): Promise<ProcessedOrder[]> {
   const allOrders: ProcessedOrder[] = [];
   let pageNumber = 1;
   const pageSize = 500;
-  let diagLogged = false;
 
   while (true) {
     const resp = await fetch(`${session.server}/api/ProcessedOrders/SearchProcessedOrders`, {
@@ -86,44 +85,50 @@ async function fetchOrders(session: LinnworksSession, fromDate: string, toDate: 
 
     if (!resp.ok) throw new Error(`SearchProcessedOrders failed: ${resp.status} ${await resp.text()}`);
 
-    const raw = await resp.json() as unknown;
-
-    // Diagnostic — log top-level shape once to confirm API response structure
-    if (!diagLogged) {
-      console.log('  [diag] Response top-level keys:', Object.keys(raw as object).join(', '));
-      diagLogged = true;
-    }
-
-    // API may return { ProcessedOrders: { Data: [...], TotalPages: N } } or { Data: [...] }
-    const container = (raw as Record<string, unknown>)['ProcessedOrders'] ?? raw;
-    const data      = ((container as Record<string, unknown>)['Data'] ?? container) as ProcessedOrder[];
+    const raw       = await resp.json() as Record<string, unknown>;
+    const container = (raw['ProcessedOrders'] ?? raw) as Record<string, unknown>;
+    const data      = (container['Data'] ?? container) as ProcessedOrder[];
 
     if (!Array.isArray(data) || !data.length) break;
 
-    // Diagnostic — log first order's keys and first item's keys once
-    if (pageNumber === 1 && data.length > 0) {
-      const first = data[0] as ProcessedOrder;
-      if (first) {
-        console.log('  [diag] First order keys:', Object.keys(first as object).join(', '));
-        console.log('  [diag] First order Source:', first.Source, '| nOrderId:', first.nOrderId);
-        const firstItem = first.Items?.[0];
-        if (firstItem) {
-          console.log('  [diag] First order item keys:', Object.keys(firstItem as object).join(', '));
-          console.log('  [diag] First order item:', JSON.stringify(firstItem));
-        } else {
-          console.log('  [diag] No items on first order (may be in different field)');
-        }
-      }
-    }
-
     allOrders.push(...data);
 
-    const totalPages = Number((container as Record<string, unknown>)['TotalPages'] ?? 1);
+    const totalPages = Number(container['TotalPages'] ?? 1);
     if (pageNumber >= totalPages || data.length < pageSize) break;
     pageNumber++;
   }
 
   return allOrders;
+}
+
+// ── Fetch items for one order ─────────────────────────────────────────────────
+
+let itemDiagLogged = false;
+
+async function fetchOrderItems(session: LinnworksSession, pkOrderID: string): Promise<OrderItem[]> {
+  const resp = await fetch(
+    `${session.server}/api/Orders/GetOrderItemsByOrderId?pkOrderId=${encodeURIComponent(pkOrderID)}`,
+    { headers: { Authorization: session.token } },
+  );
+
+  if (!resp.ok) {
+    console.warn(`  [warn] GetOrderItemsByOrderId ${pkOrderID} → ${resp.status}`);
+    return [];
+  }
+
+  const data = await resp.json() as unknown;
+
+  if (!itemDiagLogged) {
+    console.log('  [diag] Items response type:', Array.isArray(data) ? 'array' : typeof data);
+    const first = Array.isArray(data) ? data[0] : (data as Record<string, unknown>);
+    if (first && typeof first === 'object') {
+      console.log('  [diag] First item keys:', Object.keys(first as object).join(', '));
+      console.log('  [diag] First item:', JSON.stringify(first));
+    }
+    itemDiagLogged = true;
+  }
+
+  return Array.isArray(data) ? data as OrderItem[] : [];
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -132,13 +137,12 @@ async function main() {
   console.log('Linnworks 30 Day Sales → Google Sheets');
   console.log('---------------------------------------');
 
-  // Previous calendar month date range
-  const now             = new Date();
+  const now              = new Date();
   const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastOfPrevMonth  = new Date(firstOfThisMonth.getTime() - 1);
   const firstOfPrevMonth = new Date(lastOfPrevMonth.getFullYear(), lastOfPrevMonth.getMonth(), 1);
 
-  const pad  = (n: number) => String(n).padStart(2, '0');
+  const pad      = (n: number) => String(n).padStart(2, '0');
   const fromDate = `${firstOfPrevMonth.getFullYear()}-${pad(firstOfPrevMonth.getMonth() + 1)}-01T00:00:00`;
   const toDate   = `${lastOfPrevMonth.getFullYear()}-${pad(lastOfPrevMonth.getMonth() + 1)}-${pad(lastOfPrevMonth.getDate())}T23:59:59`;
 
@@ -149,20 +153,25 @@ async function main() {
   console.log(`  Session token obtained. Server: ${session.server}`);
 
   console.log('Fetching processed orders...');
-  const orders = await fetchOrders(session, fromDate, toDate);
-  console.log(`  Total orders fetched: ${orders.length}`);
-
+  const orders   = await fetchOrders(session, fromDate, toDate);
   const filtered = orders.filter(o => ALLOWED_SOURCES.has((o.Source ?? '').toUpperCase()));
-  console.log(`  eBay + Shopify orders: ${filtered.length}`);
+  console.log(`  Total orders: ${orders.length} | eBay + Shopify: ${filtered.length}`);
 
-  // Build one row per order item
+  console.log('Fetching order items (concurrency 15)...');
+  const limit          = pLimit(15);
+  const ordersWithItems = await Promise.all(
+    filtered.map(order => limit(async () => {
+      const pkOrderID = order.pkOrderID as string | undefined;
+      const items     = pkOrderID ? await fetchOrderItems(session, pkOrderID) : [];
+      return { order, items };
+    })),
+  );
+
   const outputRows: string[][] = [];
-  for (const order of filtered) {
-    const orderId   = String(order.nOrderId ?? '');
-    const received  = String(order.dReceievedDate ?? '');
-    const items     = order.Items ?? [];
+  for (const { order, items } of ordersWithItems) {
+    const orderId  = String(order.nOrderId ?? '');
+    const received = String(order.dReceivedDate ?? '');
     if (!items.length) {
-      // Include orders with no items as a single row so they're visible
       outputRows.push([orderId, received, '', '']);
       continue;
     }
