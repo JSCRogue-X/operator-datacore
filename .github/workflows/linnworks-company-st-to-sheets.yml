@@ -1,0 +1,36 @@
+name: Linnworks Company ST → Sheets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linnworks-company-st-to-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      LINNWORKS_APP_ID: ${{ secrets.LINNWORKS_APP_ID }}
+      LINNWORKS_APP_SECRET: ${{ secrets.LINNWORKS_APP_SECRET }}
+      LINNWORKS_INSTALL_TOKEN: ${{ secrets.LINNWORKS_INSTALL_TOKEN }}
+      LINNWORKS_LOCATION_KEY: ${{ secrets.LINNWORKS_LOCATION_KEY }}
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Linnworks Company ST → Sheets
+        run: npx tsx src/cli/linnworks-company-st-to-sheets.ts
