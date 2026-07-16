@@ -88,6 +88,7 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
   if (!locationKey) throw new Error('LINNWORKS_LOCATION_KEY not set');
 
   const results: { item: RawItem; loc: StockLevel }[] = [];
+  const EXCLUDED_CATEGORIES = new Set(['Stationary', 'Discontinued SPINCARE', 'Default']);
   let resolvedLocationId = locationKey;
   let pageNumber = 1;
   const pageSize = 200;
@@ -113,6 +114,8 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
     if (!Array.isArray(data) || !data.length) break;
 
     for (const item of data) {
+      if (EXCLUDED_CATEGORIES.has(item.CategoryName ?? '')) continue;
+
       const loc = item.StockLevels?.find(l =>
         l.Location?.StockLocationId === resolvedLocationId ||
         l.Location?.LocationName     === locationKey,
@@ -167,7 +170,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     num(item.Width),                    // Dim Width
     num(item.Depth),                    // Depth
     ext('ASIN'),                        // ASIN
-    ext('CBM'),                         // CBM
+    ext('SC-CartonCBM'),                // CBM
     ext('SC-SupplierCode'),             // SC-SupplierCode (duplicate per spec)
     num(loc.Due),                        // Stock due at location
     num(loc.StockLevel),                // Stock level at location
