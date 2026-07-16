@@ -55,9 +55,7 @@ async function getLinnworksSession(): Promise<LinnworksSession> {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface ExtProp {
-  ProperyName?:   string; // Linnworks has this typo
-  ProperyValue?:  string;
-  PropertyName?:  string; // guard against corrected spelling
+  ProperyName?:   string; // Linnworks typo — missing 't' in PropERTYName
   PropertyValue?: string;
 }
 
@@ -65,9 +63,8 @@ interface StockLevel {
   Location?:     { StockLocationId: string; LocationName: string };
   Available:     number;
   StockLevel?:   number;
-  StockDue?:     number;
+  Due?:          number;  // "Stock due at location"
   MinimumLevel?: number;
-  MaximumLevel?: number;
 }
 
 interface RawItem {
@@ -94,7 +91,6 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
   let resolvedLocationId = locationKey;
   let pageNumber = 1;
   const pageSize = 200;
-  let diagLogged = false;
 
   while (true) {
     const resp = await fetch(`${session.server}/api/Stock/GetStockItemsFull`, {
@@ -127,18 +123,6 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
         resolvedLocationId = loc.Location.StockLocationId;
       }
 
-      // Diagnostic — log shapes of StockLevel entry and first ExtProp once
-      if (!diagLogged) {
-        console.log(`  StockLevel keys: ${Object.keys(loc).join(', ')}`);
-        const firstProp = item.ItemExtendedProperties?.[0];
-        if (firstProp) {
-          console.log(`  ExtProp entry: ${JSON.stringify(firstProp)}`);
-        } else {
-          console.log(`  No extended properties on first item`);
-        }
-        diagLogged = true;
-      }
-
       results.push({ item, loc });
     }
 
@@ -154,9 +138,8 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
 function buildRow(item: RawItem, loc: StockLevel): string[] {
   const extMap = new Map<string, string>();
   for (const p of item.ItemExtendedProperties ?? []) {
-    // Handle both Linnworks typo (ProperyName) and corrected spelling
-    const name  = p.ProperyName  ?? p.PropertyName  ?? '';
-    const value = p.ProperyValue ?? p.PropertyValue ?? '';
+    const name  = p.ProperyName   ?? ''; // Linnworks typo — ProperyName not PropertyName
+    const value = p.PropertyValue ?? '';
     if (name) extMap.set(name, value);
   }
   const ext = (name: string) => extMap.get(name) ?? '';
@@ -186,9 +169,9 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     ext('ASIN'),                        // ASIN
     ext('CBM'),                         // CBM
     ext('SC-SupplierCode'),             // SC-SupplierCode (duplicate per spec)
-    num(loc.StockDue),                  // Stock due at location
+    num(loc.Due),                        // Stock due at location
     num(loc.StockLevel),                // Stock level at location
-    num(loc.MaximumLevel),              // Max Level
+    '',                                  // Max Level — no MaximumLevel field in API
     num(loc.MinimumLevel),              // Stock minimum level at location
     loc.Location?.LocationName ?? '',   // Stock Location
     ext('Short Title'),                 // Short Title
