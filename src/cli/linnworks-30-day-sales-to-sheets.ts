@@ -104,20 +104,20 @@ async function fetchOrders(session: LinnworksSession, fromDate: string, toDate: 
 // ── Fetch items for one order ─────────────────────────────────────────────────
 
 async function probeItemsEndpoint(session: LinnworksSession, pkOrderID: string, nOrderId: number): Promise<void> {
-  const candidates = [
-    { label: 'GET ProcessedOrders/GetProcessedOrderDetails',  method: 'GET',  url: `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails?pkOrderId=${pkOrderID}`, body: undefined, ct: undefined },
+  const candidates: Array<{ label: string; method: string; url: string; body?: string; ct?: string }> = [
+    { label: 'GET ProcessedOrders/GetProcessedOrderDetails',  method: 'GET',  url: `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails?pkOrderId=${pkOrderID}` },
     { label: 'POST ProcessedOrders/GetProcessedOrderDetails', method: 'POST', url: `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails`, body: JSON.stringify({ pkOrderId: pkOrderID }), ct: 'application/json' },
-    { label: 'GET Orders/GetOrderItemsByNumOrderId',          method: 'GET',  url: `${session.server}/api/Orders/GetOrderItemsByNumOrderId?numOrderId=${nOrderId}`, body: undefined, ct: undefined },
+    { label: 'GET Orders/GetOrderItemsByNumOrderId',          method: 'GET',  url: `${session.server}/api/Orders/GetOrderItemsByNumOrderId?numOrderId=${nOrderId}` },
     { label: 'POST Orders/GetOrderById (JSON)',               method: 'POST', url: `${session.server}/api/Orders/GetOrderById`, body: JSON.stringify({ pkOrderId: pkOrderID }), ct: 'application/json' },
     { label: 'POST Orders/GetOrderItemsByOrderId (form)',     method: 'POST', url: `${session.server}/api/Orders/GetOrderItemsByOrderId`, body: `pkOrderId=${pkOrderID}`, ct: 'application/x-www-form-urlencoded' },
   ];
 
   for (const c of candidates) {
-    const r = await fetch(c.url, {
-      method:  c.method,
-      headers: { Authorization: session.token, ...(c.ct ? { 'Content-Type': c.ct } : {}) },
-      body:    c.body,
-    });
+    const headers: Record<string, string> = { Authorization: session.token };
+    if (c.ct) headers['Content-Type'] = c.ct;
+    const init: RequestInit = { method: c.method, headers };
+    if (c.body !== undefined) init.body = c.body;
+    const r = await fetch(c.url, init);
     const text = await r.text();
     console.log(`  [probe] ${c.label} → ${r.status} | ${text.slice(0, 120)}`);
   }
