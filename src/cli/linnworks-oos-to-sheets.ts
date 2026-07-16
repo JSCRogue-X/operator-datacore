@@ -193,7 +193,8 @@ async function findFirstOosDate(
     // Format the ISO date string to UK format (e.g. "12 Jul 2026")
     const d = new Date(lastZeroDate);
     if (isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
   } catch {
     return null;
   }
@@ -202,13 +203,19 @@ async function findFirstOosDate(
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 function todayStr(): string {
-  return new Date().toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
-  });
+  const d   = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
 }
 
 function daysSince(dateStr: string): number {
-  const d = new Date(dateStr);
+  let d: Date;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [dd, mm, yyyy] = dateStr.split('/');
+    d = new Date(`${yyyy}-${mm}-${dd}`);
+  } else {
+    d = new Date(dateStr); // handles legacy "12 Jul 2026" format
+  }
   if (isNaN(d.getTime())) return 0;
   return Math.floor((Date.now() - d.getTime()) / 86_400_000);
 }
@@ -254,7 +261,7 @@ async function main() {
 
   // For new OOS items (not already in sheet), look up actual OOS date from Linnworks history
   const today = todayStr();
-  const outputRows: string[][] = [];
+  const outputRows: (string | number)[][] = [];
   let historyLookups = 0;
 
   let historyResolved = 0;
@@ -279,7 +286,7 @@ async function main() {
     }
 
     const days = daysSince(firstSeen);
-    outputRows.push([item.SKU, item.Title, String(item.Available), String(days), firstSeen]);
+    outputRows.push([item.SKU, item.Title, item.Available, days, firstSeen]);
   }
 
   if (historyLookups > 0) {
@@ -287,7 +294,7 @@ async function main() {
   }
 
   // Sort by days since OOS descending (longest OOS first)
-  outputRows.sort((a, b) => parseInt(b[3]!) - parseInt(a[3]!));
+  outputRows.sort((a, b) => Number(b[3]) - Number(a[3]));
 
   // Get or create tab
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });

@@ -138,7 +138,7 @@ async function fetchAllItems(session: LinnworksSession): Promise<{ item: RawItem
 
 // ── Build row ───────────────────────────────────────────────────────────────
 
-function buildRow(item: RawItem, loc: StockLevel): string[] {
+function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
   const extMap = new Map<string, string>();
   for (const p of item.ItemExtendedProperties ?? []) {
     const name  = p.ProperyName   ?? ''; // Linnworks typo — ProperyName not PropertyName
@@ -146,7 +146,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     if (name) extMap.set(name, value);
   }
   const ext = (name: string) => extMap.get(name) ?? '';
-  const num = (v: number | undefined) => (v !== undefined && v !== null) ? String(v) : '';
+  const num = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
 
   return [
     item.ItemNumber,                    // SKU
@@ -179,7 +179,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     loc.Location?.LocationName ?? '',   // Stock Location
     ext('Short Title'),                 // Short Title
     ext('UnitQuantity'),                // UnitQuantity
-    String(loc.Available),              // Stock available level at location
+    loc.Available,                      // Stock available level at location
     ext('FBA SKU'),                     // FBA SKU
     ext('SC-PalletQuantity-DE'),        // SC-PalletQuantity-DE
   ];

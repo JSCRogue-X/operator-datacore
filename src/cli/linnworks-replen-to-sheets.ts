@@ -154,7 +154,7 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
 
 // ── Build row ───────────────────────────────────────────────────────────────
 
-function buildRow(item: RawItem, loc: StockLevel): string[] {
+function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
   const extMap = new Map<string, string>();
   for (const p of item.ItemExtendedProperties ?? []) {
     const name  = p.ProperyName   ?? '';
@@ -162,7 +162,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     if (name) extMap.set(name, value);
   }
   const ext = (name: string) => extMap.get(name) ?? '';
-  const num = (v: number | undefined) => (v !== undefined && v !== null) ? String(v) : '';
+  const num = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
 
   // Supplier data — field is 'Supplier' (confirmed from API)
   const supplier = item.Suppliers?.[0] as Record<string, unknown> | undefined;
@@ -170,8 +170,8 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
 
   // EBAY PRICE from channel pricing (Source = EBAY, SubSource = EBAY1_UK)
   const ebayChannel = item.ItemChannelPrices?.find(p => p.Source === 'EBAY') as Record<string, unknown> | undefined;
-  const ebayPrice = ebayChannel
-    ? String(ebayChannel['Price'] ?? ebayChannel['RetailPrice'] ?? ebayChannel['SalePrice'] ?? '')
+  const ebayPrice: string | number = ebayChannel
+    ? ((ebayChannel['Price'] ?? ebayChannel['RetailPrice'] ?? ebayChannel['SalePrice'] ?? '') as string | number)
     : '';
 
   return [
@@ -179,7 +179,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     item.ItemTitle,                     // Item Title
     item.BarcodeNumber      ?? '',      // Barcode Number
     item.CategoryName       ?? '',      // Category
-    String(loc.Available),              // Stock available level at location
+    loc.Available,                      // Stock available level at location
     num(item.PurchasePrice),            // Purchase Price
     num(item.Weight),                   // Weight
     loc.Location?.LocationName ?? '',   // Stock Location

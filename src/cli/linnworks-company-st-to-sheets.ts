@@ -146,12 +146,12 @@ async function main() {
       return [
         item.ItemNumber,
         item.ItemTitle,
-        String(loc.Available),
+        loc.Available,
         extMap.get('FBA SKU') ?? '',
-        (loc.MinimumLevel !== undefined && loc.MinimumLevel !== null) ? String(loc.MinimumLevel) : '',
+        loc.MinimumLevel ?? '',
       ];
     })
-    .sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
+    .sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')));
 
   // ── Google Sheets ──────────────────────────────────────────────────────
   const auth = new google.auth.GoogleAuth({

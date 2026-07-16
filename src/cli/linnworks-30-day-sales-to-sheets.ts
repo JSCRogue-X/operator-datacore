@@ -15,6 +15,12 @@ const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
 
 const HEADERS = ['nOrderId', 'dReceievedDate', 'OrderItemSKU', 'OrderItemQuantity'];
 
+function formatDate(raw: string): string {
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return raw;
+  return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
+}
+
 const ALLOWED_SOURCES = new Set(['EBAY', 'SHOPIFY']);
 
 // ── Linnworks auth ──────────────────────────────────────────────────────────
@@ -169,16 +175,16 @@ async function main() {
     })),
   );
 
-  const outputRows: string[][] = [];
+  const outputRows: (string | number)[][] = [];
   for (const { order, items } of ordersWithItems) {
-    const orderId  = String(order.nOrderId ?? '');
-    const received = String(order.dReceivedDate ?? '');
+    const orderId  = order.nOrderId ?? '';
+    const received = formatDate(String(order.dReceivedDate ?? ''));
     if (!items.length) {
       outputRows.push([orderId, received, '', '']);
       continue;
     }
     for (const item of items) {
-      outputRows.push([orderId, received, String(item.SKU ?? ''), String(item.Quantity ?? '')]);
+      outputRows.push([orderId, received, String(item.SKU ?? ''), item.Quantity ?? '']);
     }
   }
 

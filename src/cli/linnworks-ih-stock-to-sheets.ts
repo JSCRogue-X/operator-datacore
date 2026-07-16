@@ -136,9 +136,9 @@ async function main() {
   const now     = new Date();
   const dd      = String(now.getDate()).padStart(2, '0');
   const mm      = String(now.getMonth() + 1).padStart(2, '0');
-  const yyyy    = String(now.getFullYear());
+  const yyyy    = now.getFullYear();
   const dateStr = `${dd}/${mm}/${yyyy}`;
-  const weekNum = String(isoWeek(now));
+  const weekNum = isoWeek(now);
   const month   = MONTHS[now.getMonth()];
   const dateAlt = `${yyyy}${mm}`;
 
@@ -164,9 +164,9 @@ async function main() {
       return [
         item.ItemNumber,                                                                          // SKU
         item.ItemTitle,                                                                           // Item Title
-        String(loc.Available),                                                                    // Stock available level at location
+        loc.Available,                                                                            // Stock available level at location
         extMap.get('FBA SKU') ?? '',                                                              // FBA SKU
-        (loc.MinimumLevel !== undefined && loc.MinimumLevel !== null) ? String(loc.MinimumLevel) : '', // Min Levels
+        loc.MinimumLevel ?? '',                                                                   // Min Levels
         dateStr,                                                                                  // Date
         weekNum,                                                                                  // Week Number
         yyyy,                                                                                     // Year
