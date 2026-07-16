@@ -114,7 +114,7 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
         loadVariationParents: false,
         entriesPerPage:       pageSize,
         pageNumber,
-        dataRequirements:     ['StockLevels', 'ExtendedProperties', 'Suppliers'],
+        dataRequirements:     ['StockLevels', 'ExtendedProperties', 'Supplier'],
         searchTypes:          ['SKU', 'Title', 'Barcode'],
       }),
     });
