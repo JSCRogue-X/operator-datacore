@@ -126,27 +126,32 @@ async function probeItemsEndpoint(session: LinnworksSession, pkOrderID: string, 
 let itemShapeLogged = false;
 
 async function fetchOrderItems(session: LinnworksSession, pkOrderID: string): Promise<OrderItem[]> {
-  const resp = await fetch(
-    `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails?pkOrderId=${encodeURIComponent(pkOrderID)}`,
-    { headers: { Authorization: session.token } },
-  );
+  const resp = await fetch(`${session.server}/api/Orders/GetOrderById`, {
+    method:  'POST',
+    headers: { Authorization: session.token, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ pkOrderId: pkOrderID }),
+  });
 
   if (!resp.ok) {
-    console.warn(`  [warn] GetProcessedOrderDetails ${pkOrderID} → ${resp.status}`);
+    console.warn(`  [warn] GetOrderById ${pkOrderID} → ${resp.status}`);
     return [];
   }
 
-  const data = await resp.json() as unknown;
+  const data = await resp.json() as Record<string, unknown>;
 
   if (!itemShapeLogged) {
-    console.log('  [shape] Top-level keys:', Object.keys(data as object).join(', '));
-    console.log('  [shape] Raw:', JSON.stringify(data).slice(0, 400));
+    console.log('  [shape] Top-level keys:', Object.keys(data).join(', '));
+    const itemsRaw = data['Items'] ?? data['OrderItems'] ?? data['Lines'] ?? data['OrderLines'];
+    if (Array.isArray(itemsRaw) && itemsRaw.length > 0) {
+      console.log('  [shape] Item[0] keys:', Object.keys(itemsRaw[0] as object).join(', '));
+      console.log('  [shape] Item[0]:', JSON.stringify(itemsRaw[0]).slice(0, 300));
+    } else {
+      console.log('  [shape] Full response:', JSON.stringify(data).slice(0, 500));
+    }
     itemShapeLogged = true;
   }
 
-  const items = (data as Record<string, unknown>)['Items'] ??
-                (data as Record<string, unknown>)['OrderItems'] ??
-                (Array.isArray(data) ? data : []);
+  const items = data['Items'] ?? data['OrderItems'] ?? data['Lines'] ?? data['OrderLines'] ?? [];
   return Array.isArray(items) ? items as OrderItem[] : [];
 }
 
