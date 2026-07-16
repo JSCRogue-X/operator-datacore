@@ -150,8 +150,8 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     item.ItemTitle,                     // Item Title
     item.CategoryName    ?? '',         // Category
     item.BarcodeNumber   ?? '',         // Barcode Number
-    ext('Commodity Codes'),             // Commodity Codes
-    ext('CN22'),                        // CN22
+    ext('CommodityCode'),               // Commodity Codes
+    ext('CN22Description'),             // CN22
     ext('HSTariffCode'),                // HSTariffCode
     ext('SC-CartonSize'),               // SC-CartonSize
     ext('SC-SupplierCode'),             // SC-SupplierCode
