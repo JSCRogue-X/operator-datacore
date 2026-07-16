@@ -13,12 +13,10 @@ const TAB_NAME       = '30 Day Sales';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
-const HEADERS = ['Week Start', 'Year', 'Month', 'Week No.', 'Source', 'SKU', 'Total Units'];
+const HEADERS = ['Week Start', 'Year', 'Month', 'Week No.', 'SKU', 'Total Units'];
 
 const ALLOWED_SOURCES = new Set(['EBAY', 'SHOPIFY']);
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const SOURCE_LABELS: Record<string, string> = { EBAY: 'eBay', SHOPIFY: 'Shopify' };
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -37,9 +35,9 @@ function mondayOf(d: Date): Date {
   return date;
 }
 
-function fmtDate(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getUTCDate())}-${p(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
+// Google Sheets date serial — days since 30 Dec 1899
+function toSheetsSerial(d: Date): number {
+  return Math.round((d.getTime() - Date.UTC(1899, 11, 30)) / 86400000);
 }
 
 // ── Linnworks auth ──────────────────────────────────────────────────────────
@@ -193,32 +191,30 @@ async function main() {
     })),
   );
 
-  // Aggregate by Week Start + Source + SKU
-  interface AggRow { weekStart: Date; year: number; month: string; weekNo: number; source: string; sku: string; qty: number }
+  // Aggregate by Week Start + SKU
+  interface AggRow { weekStart: Date; year: number; month: string; weekNo: number; sku: string; qty: number }
   const aggMap = new Map<string, AggRow>();
 
   for (const { order, items } of ordersWithItems) {
-    const rawDate = String(order.dReceivedDate ?? '');
-    const source  = SOURCE_LABELS[(order.Source ?? '').toUpperCase()] ?? String(order.Source ?? '');
-    const orderDate = new Date(rawDate);
+    const orderDate = new Date(String(order.dReceivedDate ?? ''));
     if (isNaN(orderDate.getTime())) continue;
 
-    const wStart  = mondayOf(orderDate);
-    const wNo     = isoWeek(orderDate);
-    const year    = wStart.getUTCFullYear();
-    const month   = MONTHS[wStart.getUTCMonth()] ?? '';
+    const wStart = mondayOf(orderDate);
+    const wNo    = isoWeek(orderDate);
+    const year   = wStart.getUTCFullYear();
+    const month  = MONTHS[wStart.getUTCMonth()] ?? '';
 
     for (const item of items) {
       const sku = String(item.SKU ?? '').trim();
       if (!sku) continue;
       const qty = Number(item.Quantity) || 0;
-      const key = `${fmtDate(wStart)}|${source}|${sku}`;
+      const key = `${wStart.getTime()}|${sku}`;
 
       const existing = aggMap.get(key);
       if (existing) {
         existing.qty += qty;
       } else {
-        aggMap.set(key, { weekStart: wStart, year, month, weekNo: wNo, source, sku, qty });
+        aggMap.set(key, { weekStart: wStart, year, month, weekNo: wNo, sku, qty });
       }
     }
   }
@@ -226,10 +222,9 @@ async function main() {
   const outputRows: (string | number)[][] = Array.from(aggMap.values())
     .sort((a, b) =>
       a.weekStart.getTime() - b.weekStart.getTime() ||
-      a.source.localeCompare(b.source)              ||
       a.sku.localeCompare(b.sku),
     )
-    .map(r => [fmtDate(r.weekStart), r.year, r.month, r.weekNo, r.source, r.sku, r.qty]);
+    .map(r => [toSheetsSerial(r.weekStart), r.year, r.month, r.weekNo, r.sku, r.qty]);
 
   console.log(`  Rows to write: ${outputRows.length}`);
 
@@ -257,7 +252,20 @@ async function main() {
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
-    requestBody: { requests: [{ updateCells: { range: { sheetId }, fields: 'userEnteredValue' } }] },
+    requestBody: {
+      requests: [
+        // Clear existing content
+        { updateCells: { range: { sheetId }, fields: 'userEnteredValue' } },
+        // Format column A (Week Start) as DD-MM-YYYY date
+        {
+          repeatCell: {
+            range:  { sheetId, startColumnIndex: 0, endColumnIndex: 1, startRowIndex: 1 },
+            cell:   { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'DD-MM-YYYY' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+      ],
+    },
   });
 
   await sheets.spreadsheets.values.update({
