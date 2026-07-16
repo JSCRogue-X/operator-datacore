@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 // linnworks-30-day-sales-to-sheets.ts
 // Fetches the previous calendar month's eBay and Shopify orders from Linnworks
-// and writes one row per order item to the "30 Day Sales" tab.
+// and writes one aggregated row per Week Start / Source / SKU to the "30 Day Sales" tab.
 // Run: npx tsx src/cli/linnworks-30-day-sales-to-sheets.ts
 
 import 'dotenv/config';
@@ -13,10 +13,34 @@ const TAB_NAME       = '30 Day Sales';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
-const HEADERS = ['OrderItemSKU', 'TotalQuantitySold'];
-
+const HEADERS = ['Week Start', 'Year', 'Month', 'Week No.', 'Source', 'SKU', 'Total Units'];
 
 const ALLOWED_SOURCES = new Set(['EBAY', 'SHOPIFY']);
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const SOURCE_LABELS: Record<string, string> = { EBAY: 'eBay', SHOPIFY: 'Shopify' };
+
+// ── Date helpers ─────────────────────────────────────────────────────────────
+
+function isoWeek(d: Date): number {
+  const date   = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+function mondayOf(d: Date): Date {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day  = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - (day - 1));
+  return date;
+}
+
+function fmtDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())}-${p(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
+}
 
 // ── Linnworks auth ──────────────────────────────────────────────────────────
 
@@ -115,8 +139,7 @@ async function fetchOrderItems(session: LinnworksSession, pkOrderID: string): Pr
     });
 
     if (resp.status === 429) {
-      const delay = 2000 * (attempt + 1);
-      await new Promise(r => setTimeout(r, delay));
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
       continue;
     }
 
@@ -170,19 +193,43 @@ async function main() {
     })),
   );
 
-  // Aggregate by SKU
-  const skuTotals = new Map<string, number>();
-  for (const { items } of ordersWithItems) {
+  // Aggregate by Week Start + Source + SKU
+  interface AggRow { weekStart: Date; year: number; month: string; weekNo: number; source: string; sku: string; qty: number }
+  const aggMap = new Map<string, AggRow>();
+
+  for (const { order, items } of ordersWithItems) {
+    const rawDate = String(order.dReceivedDate ?? '');
+    const source  = SOURCE_LABELS[(order.Source ?? '').toUpperCase()] ?? String(order.Source ?? '');
+    const orderDate = new Date(rawDate);
+    if (isNaN(orderDate.getTime())) continue;
+
+    const wStart  = mondayOf(orderDate);
+    const wNo     = isoWeek(orderDate);
+    const year    = wStart.getUTCFullYear();
+    const month   = MONTHS[wStart.getUTCMonth()] ?? '';
+
     for (const item of items) {
       const sku = String(item.SKU ?? '').trim();
       if (!sku) continue;
-      skuTotals.set(sku, (skuTotals.get(sku) ?? 0) + (Number(item.Quantity) || 0));
+      const qty = Number(item.Quantity) || 0;
+      const key = `${fmtDate(wStart)}|${source}|${sku}`;
+
+      const existing = aggMap.get(key);
+      if (existing) {
+        existing.qty += qty;
+      } else {
+        aggMap.set(key, { weekStart: wStart, year, month, weekNo: wNo, source, sku, qty });
+      }
     }
   }
 
-  const outputRows: (string | number)[][] = Array.from(skuTotals.entries())
-    .sort((a, b) => b[1] - a[1]) // best sellers first
-    .map(([sku, qty]) => [sku, qty]);
+  const outputRows: (string | number)[][] = Array.from(aggMap.values())
+    .sort((a, b) =>
+      a.weekStart.getTime() - b.weekStart.getTime() ||
+      a.source.localeCompare(b.source)              ||
+      a.sku.localeCompare(b.sku),
+    )
+    .map(r => [fmtDate(r.weekStart), r.year, r.month, r.weekNo, r.source, r.sku, r.qty]);
 
   console.log(`  Rows to write: ${outputRows.length}`);
 
