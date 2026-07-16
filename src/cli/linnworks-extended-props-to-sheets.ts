@@ -171,7 +171,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     ext('SC-SupplierCode'),             // SC-SupplierCode (duplicate per spec)
     num(loc.Due),                        // Stock due at location
     num(loc.StockLevel),                // Stock level at location
-    '',                                  // Max Level — no MaximumLevel field in API
+    ext('Max Level'),                    // Max Level — extended property
     num(loc.MinimumLevel),              // Stock minimum level at location
     loc.Location?.LocationName ?? '',   // Stock Location
     ext('Short Title'),                 // Short Title
