@@ -76,6 +76,12 @@ interface Supplier {
   [key: string]: unknown;
 }
 
+interface ChannelPrice {
+  Source?:    string;
+  SubSource?: string;
+  [key: string]: unknown;
+}
+
 interface RawItem {
   ItemNumber:              string;
   ItemTitle:               string;
@@ -90,6 +96,7 @@ interface RawItem {
   StockLevels?:            StockLevel[];
   ItemExtendedProperties?: ExtProp[];
   Suppliers?:              Supplier[];
+  ItemChannelPrices?:      ChannelPrice[];
 }
 
 // ── Fetch ───────────────────────────────────────────────────────────────────
@@ -114,7 +121,7 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
         loadVariationParents: false,
         entriesPerPage:       pageSize,
         pageNumber,
-        dataRequirements:     ['StockLevels', 'ExtendedProperties', 'Supplier'],
+        dataRequirements:     ['StockLevels', 'ExtendedProperties', 'Supplier', 'ChannelPrice'],
         searchTypes:          ['SKU', 'Title', 'Barcode'],
       }),
     });
@@ -137,7 +144,7 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
         resolvedLocationId = loc.Location.StockLocationId;
       }
 
-      // Diagnostic — log all ext prop names and supplier structure once
+      // Diagnostic — log shapes of unknown fields once
       if (!diagLogged) {
         const allPropNames = (item.ItemExtendedProperties ?? [])
           .map(p => p.ProperyName ?? '')
@@ -148,6 +155,12 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
           console.log(`  Supplier entry keys: ${Object.keys(firstSupplier).join(', ')}`);
         } else {
           console.log(`  No suppliers on first item`);
+        }
+        const ebayPrice = item.ItemChannelPrices?.find(p => p.Source === 'EBAY');
+        if (ebayPrice) {
+          console.log(`  EBAY channel price entry: ${JSON.stringify(ebayPrice)}`);
+        } else {
+          console.log(`  No EBAY channel price on first item`);
         }
         diagLogged = true;
       }
@@ -180,6 +193,12 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     supplier?.['SupplierName'] ?? supplier?.['Name'] ?? supplier?.['supplierName'] ?? ''
   );
 
+  // EBAY PRICE from channel pricing (Source = EBAY, SubSource = EBAY1_UK)
+  const ebayChannel = item.ItemChannelPrices?.find(p => p.Source === 'EBAY') as Record<string, unknown> | undefined;
+  const ebayPrice = ebayChannel
+    ? String(ebayChannel['Price'] ?? ebayChannel['RetailPrice'] ?? ebayChannel['SalePrice'] ?? '')
+    : '';
+
   return [
     item.ItemNumber,                    // SKU
     item.ItemTitle,                     // Item Title
@@ -206,7 +225,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     num(item.Width),                    // Dim Width
     num(item.Depth),                    // Depth
     ext('SC-PalletQuantity-DE'),        // SC-PalletQuantity-DE
-    ext('EBAY PRICE'),                  // EBAY PRICE — name TBC from diagnostic
+    ebayPrice,                          // EBAY PRICE — from channel pricing (Source=EBAY)
     item.PackageGroupName   ?? '',      // Default Packaging Group
     ext('PostageType'),                 // Postage Type
     ext('SC-SupplierCode'),             // SC-SupplierCode
@@ -220,8 +239,8 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     ext('FBA_EU_Inbound_Cost'),         // FBA_EU_Inbound_Cost — name TBC
     ext('FBA_UK_Landed_Cost'),          // FBA_UK_Landed_Cost — name TBC
     ext('FBA_EU_Landed_Cost'),          // FBA_EU_Landed_Cost — name TBC
-    ext('AGL Detailed Description of Merchandise in English'), // AGL description — name TBC
-    ext('AGL Material'),                // AGL Material — name TBC
+    ext('AGL-Detailed-Description-of-Merchandise-in-English'), // AGL description
+    ext('AGL-Material'),                // AGL Material
     num(loc.StockLevel),                // Stock level at location
     num(loc.MinimumLevel),              // Stock minimum level at location
   ];
