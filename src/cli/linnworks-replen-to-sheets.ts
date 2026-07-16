@@ -22,7 +22,7 @@ const HEADERS = [
   'SC-PalletQuantity-DE', 'EBAY PRICE', 'Default Packaging Group', 'Postage Type',
   'SC-SupplierCode', 'SC-UnitPriceUSD', 'SC-Supplier-PQ', 'SC-SupplierTitle',
   'Supplier Name',
-  'EU_Inbound_DD_Duty_Cost', 'FBA_3_Month_Storage_Cost',
+  'EU_Inbound_DO_Duty_Cost', 'FBA_3_Month_Storage_Cost',
   'FBA_UK_Inbound_Cost', 'FBA_EU_Inbound_Cost',
   'FBA_UK_Landed_Cost', 'FBA_EU_Landed_Cost',
   'AGL Detailed Description of Merchandise in English', 'AGL Material',
@@ -109,8 +109,6 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
   let resolvedLocationId = locationKey;
   let pageNumber = 1;
   const pageSize = 200;
-  let diagLogged = false;
-
   while (true) {
     const resp = await fetch(`${session.server}/api/Stock/GetStockItemsFull`, {
       method:  'POST',
@@ -144,27 +142,6 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
         resolvedLocationId = loc.Location.StockLocationId;
       }
 
-      // Diagnostic — log shapes of unknown fields once
-      if (!diagLogged) {
-        const allPropNames = (item.ItemExtendedProperties ?? [])
-          .map(p => p.ProperyName ?? '')
-          .filter(Boolean);
-        console.log(`  All ext prop names: ${allPropNames.join(', ')}`);
-        const firstSupplier = item.Suppliers?.[0];
-        if (firstSupplier) {
-          console.log(`  Supplier entry keys: ${Object.keys(firstSupplier).join(', ')}`);
-        } else {
-          console.log(`  No suppliers on first item`);
-        }
-        const ebayPrice = item.ItemChannelPrices?.find(p => p.Source === 'EBAY');
-        if (ebayPrice) {
-          console.log(`  EBAY channel price entry: ${JSON.stringify(ebayPrice)}`);
-        } else {
-          console.log(`  No EBAY channel price on first item`);
-        }
-        diagLogged = true;
-      }
-
       results.push({ item, loc });
     }
 
@@ -187,11 +164,9 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
   const ext = (name: string) => extMap.get(name) ?? '';
   const num = (v: number | undefined) => (v !== undefined && v !== null) ? String(v) : '';
 
-  // Supplier name — try common field names from the Suppliers array
+  // Supplier data — field is 'Supplier' (confirmed from API)
   const supplier = item.Suppliers?.[0] as Record<string, unknown> | undefined;
-  const supplierName = String(
-    supplier?.['SupplierName'] ?? supplier?.['Name'] ?? supplier?.['supplierName'] ?? ''
-  );
+  const supplierName = String(supplier?.['Supplier'] ?? '');
 
   // EBAY PRICE from channel pricing (Source = EBAY, SubSource = EBAY1_UK)
   const ebayChannel = item.ItemChannelPrices?.find(p => p.Source === 'EBAY') as Record<string, unknown> | undefined;
@@ -216,7 +191,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     ext('CommodityCode'),               // Commodity Code
     ext('CountryOfOrigin'),             // Country Of Origin
     ext('CN22Description'),             // CN22 Description
-    ext('SC-CartonDimensions'),         // Carton Dimensions — name TBC from diagnostic
+    ext('SC-CartonSize'),                // Carton Dimensions
     ext('SC-CartonCBM'),                // SC-CartonCBM
     ext('ASIN'),                        // ASIN
     ext('FBA SKU'),                     // FBA SKU
@@ -229,11 +204,11 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     item.PackageGroupName   ?? '',      // Default Packaging Group
     ext('PostageType'),                 // Postage Type
     ext('SC-SupplierCode'),             // SC-SupplierCode
-    ext('SC-UnitPriceUSD'),             // SC-UnitPriceUSD — name TBC from diagnostic
-    ext('SC-Supplier-PQ'),              // SC-Supplier-PQ — name TBC from diagnostic
-    ext('SC-SupplierTitle'),            // SC-SupplierTitle — name TBC from diagnostic
+    ext('SC-UnitPriceUSD'),             // SC-UnitPriceUSD
+    ext('SC-Supplier-PQ'),               // SC-Supplier-PQ
+    ext('SC-SupplierTitle'),            // SC-SupplierTitle
     supplierName,                       // Supplier Name
-    ext('EU_Inbound_DD_Duty_Cost'),     // EU_Inbound_DD_Duty_Cost — name TBC
+    ext('EU_Inbound_DO_Duty_Cost'),     // EU_Inbound_DO_Duty_Cost
     ext('FBA_3_Month_Storage_Cost'),    // FBA_3_Month_Storage_Cost — name TBC
     ext('FBA_UK_Inbound_Cost'),         // FBA_UK_Inbound_Cost — name TBC
     ext('FBA_EU_Inbound_Cost'),         // FBA_EU_Inbound_Cost — name TBC
