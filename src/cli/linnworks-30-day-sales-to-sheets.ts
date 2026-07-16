@@ -107,7 +107,7 @@ let itemDiagLogged = false;
 
 async function fetchOrderItems(session: LinnworksSession, pkOrderID: string): Promise<OrderItem[]> {
   const resp = await fetch(
-    `${session.server}/api/Orders/GetOrderItemsByOrderId?pkOrderId=${encodeURIComponent(pkOrderID)}`,
+    `${session.server}/api/ProcessedOrders/GetProcessedOrderItems?pkOrderId=${encodeURIComponent(pkOrderID)}`,
     { headers: { Authorization: session.token } },
   );
 
