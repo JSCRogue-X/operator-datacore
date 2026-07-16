@@ -37,11 +37,7 @@ function toPercent(num: number, den: number): string {
 
 function calcMetrics(rows: Array<Record<string, string>>, label: string) {
   // Only count SKUs with any inventory presence
-  const active = rows.filter(r => {
-    const available = parseFloat(r['available'] ?? '0');
-    const totalQty = parseFloat(r['total-quantity'] ?? '0');
-    return available > 0 || totalQty > 0;
-  });
+  const active = rows.filter(r => parseFloat(r['available'] ?? '0') > 0);
 
   const total = active.length;
   const snapshotDate = rows[0]?.['snapshot-date'] ?? new Date().toISOString().slice(0, 10);
