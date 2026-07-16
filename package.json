@@ -55,7 +55,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^24.13.3",
     "@types/pg": "^8.11.6",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",

@@ -11,7 +11,7 @@ permissions:
 jobs:
   update-sheets:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

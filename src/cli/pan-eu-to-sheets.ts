@@ -10,7 +10,7 @@ import { google } from 'googleapis';
 import { gunzipSync } from 'node:zlib';
 import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
-import { runReport, parseTsv, parseCsv } from '../lib/sp-api/reports.js';
+import { runReport, parseTsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = '1njxkOOPCPk1RCNJ0kTGpYQ_JTgz5d4wrLU2Uj_bC4vE';
 const TAB_NAME       = 'Pan EU';

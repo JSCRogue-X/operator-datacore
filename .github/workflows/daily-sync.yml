@@ -69,7 +69,8 @@ jobs:
           # pg_cron handles this on a 14:30 UTC schedule too, but a fresh roll
           # right after the sync gives the cleanest dashboard read.
           node --input-type=module -e "
-            import('pg').then(async ({ Client }) => {
+            import('pg').then(async (mod) => {
+              const Client = mod.Client ?? mod.default.Client;
               const c = new Client({ connectionString: process.env.SUPABASE_DB_URL, ssl: { rejectUnauthorized: false } });
               await c.connect();
               const r = await c.query('SELECT * FROM ops.refresh_all_daily()');
