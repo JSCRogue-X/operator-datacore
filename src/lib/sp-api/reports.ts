@@ -66,7 +66,7 @@ export async function runReport(client: SpApiClient, opts: RunReportOpts): Promi
   let waitMs = 5_000;
   const maxWaitMs = 60_000;
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 130; i++) {
     const got = await client.request<GetReportResp>({
       method: 'GET',
       path: `/reports/2021-06-30/reports/${reportId}`,

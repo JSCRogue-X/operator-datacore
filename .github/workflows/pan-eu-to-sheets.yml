@@ -11,7 +11,7 @@ permissions:
 jobs:
   pan-eu-to-sheets:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 135
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
