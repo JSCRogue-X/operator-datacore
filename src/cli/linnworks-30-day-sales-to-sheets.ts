@@ -46,15 +46,17 @@ async function getLinnworksSession(): Promise<LinnworksSession> {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface OrderItem {
+  SKU?:      string;
+  Quantity?: number;
   [key: string]: unknown;
 }
 
 interface ProcessedOrder {
-  pkOrderID?:      string;
-  nOrderId?:       number;
-  dReceivedDate?:  string;
-  Source?:         string;
-  [key: string]:   unknown;
+  pkOrderID?:     string;
+  nOrderId?:      number;
+  dReceivedDate?: string;
+  Source?:        string;
+  [key: string]:  unknown;
 }
 
 // ── Fetch orders ─────────────────────────────────────────────────────────────
@@ -103,56 +105,32 @@ async function fetchOrders(session: LinnworksSession, fromDate: string, toDate: 
 
 // ── Fetch items for one order ─────────────────────────────────────────────────
 
-async function probeItemsEndpoint(session: LinnworksSession, pkOrderID: string, nOrderId: number): Promise<void> {
-  const candidates: Array<{ label: string; method: string; url: string; body?: string; ct?: string }> = [
-    { label: 'GET ProcessedOrders/GetProcessedOrderDetails',  method: 'GET',  url: `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails?pkOrderId=${pkOrderID}` },
-    { label: 'POST ProcessedOrders/GetProcessedOrderDetails', method: 'POST', url: `${session.server}/api/ProcessedOrders/GetProcessedOrderDetails`, body: JSON.stringify({ pkOrderId: pkOrderID }), ct: 'application/json' },
-    { label: 'GET Orders/GetOrderItemsByNumOrderId',          method: 'GET',  url: `${session.server}/api/Orders/GetOrderItemsByNumOrderId?numOrderId=${nOrderId}` },
-    { label: 'POST Orders/GetOrderById (JSON)',               method: 'POST', url: `${session.server}/api/Orders/GetOrderById`, body: JSON.stringify({ pkOrderId: pkOrderID }), ct: 'application/json' },
-    { label: 'POST Orders/GetOrderItemsByOrderId (form)',     method: 'POST', url: `${session.server}/api/Orders/GetOrderItemsByOrderId`, body: `pkOrderId=${pkOrderID}`, ct: 'application/x-www-form-urlencoded' },
-  ];
-
-  for (const c of candidates) {
-    const headers: Record<string, string> = { Authorization: session.token };
-    if (c.ct) headers['Content-Type'] = c.ct;
-    const init: RequestInit = { method: c.method, headers };
-    if (c.body !== undefined) init.body = c.body;
-    const r = await fetch(c.url, init);
-    const text = await r.text();
-    console.log(`  [probe] ${c.label} → ${r.status} | ${text.slice(0, 120)}`);
-  }
-}
-
-let itemShapeLogged = false;
-
 async function fetchOrderItems(session: LinnworksSession, pkOrderID: string): Promise<OrderItem[]> {
-  const resp = await fetch(`${session.server}/api/Orders/GetOrderById`, {
-    method:  'POST',
-    headers: { Authorization: session.token, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ pkOrderId: pkOrderID }),
-  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const resp = await fetch(`${session.server}/api/Orders/GetOrderById`, {
+      method:  'POST',
+      headers: { Authorization: session.token, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ pkOrderId: pkOrderID }),
+    });
 
-  if (!resp.ok) {
-    console.warn(`  [warn] GetOrderById ${pkOrderID} → ${resp.status}`);
-    return [];
-  }
-
-  const data = await resp.json() as Record<string, unknown>;
-
-  if (!itemShapeLogged) {
-    console.log('  [shape] Top-level keys:', Object.keys(data).join(', '));
-    const itemsRaw = data['Items'] ?? data['OrderItems'] ?? data['Lines'] ?? data['OrderLines'];
-    if (Array.isArray(itemsRaw) && itemsRaw.length > 0) {
-      console.log('  [shape] Item[0] keys:', Object.keys(itemsRaw[0] as object).join(', '));
-      console.log('  [shape] Item[0]:', JSON.stringify(itemsRaw[0]).slice(0, 300));
-    } else {
-      console.log('  [shape] Full response:', JSON.stringify(data).slice(0, 500));
+    if (resp.status === 429) {
+      const delay = 2000 * (attempt + 1);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
     }
-    itemShapeLogged = true;
+
+    if (!resp.ok) {
+      console.warn(`  [warn] GetOrderById ${pkOrderID} → ${resp.status}`);
+      return [];
+    }
+
+    const data  = await resp.json() as Record<string, unknown>;
+    const items = data['Items'];
+    return Array.isArray(items) ? items as OrderItem[] : [];
   }
 
-  const items = data['Items'] ?? data['OrderItems'] ?? data['Lines'] ?? data['OrderLines'] ?? [];
-  return Array.isArray(items) ? items as OrderItem[] : [];
+  console.warn(`  [warn] GetOrderById ${pkOrderID} → gave up after 429 retries`);
+  return [];
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -181,16 +159,8 @@ async function main() {
   const filtered = orders.filter(o => ALLOWED_SOURCES.has((o.Source ?? '').toUpperCase()));
   console.log(`  Total orders: ${orders.length} | eBay + Shopify: ${filtered.length}`);
 
-  // Probe the first order to find which endpoint returns items
-  if (filtered.length > 0) {
-    const first = filtered[0]!;
-    console.log(`\nProbing item endpoints for order ${first.nOrderId} (${first.pkOrderID})...`);
-    await probeItemsEndpoint(session, first.pkOrderID as string, first.nOrderId as number);
-    console.log('');
-  }
-
-  console.log('Fetching order items (concurrency 3)...');
-  const limit          = pLimit(3);
+  console.log('Fetching order items...');
+  const limit          = pLimit(2);
   const ordersWithItems = await Promise.all(
     filtered.map(order => limit(async () => {
       const pkOrderID = order.pkOrderID as string | undefined;
@@ -208,9 +178,7 @@ async function main() {
       continue;
     }
     for (const item of items) {
-      const sku = String(item['SKU'] ?? item['sku'] ?? item['ItemSKU'] ?? item['ItemNumber'] ?? '');
-      const qty = String(item['nQty'] ?? item['Qty'] ?? item['Quantity'] ?? item['qty'] ?? '');
-      outputRows.push([orderId, received, sku, qty]);
+      outputRows.push([orderId, received, String(item.SKU ?? ''), String(item.Quantity ?? '')]);
     }
   }
 
