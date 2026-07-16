@@ -53,18 +53,18 @@ jobs:
       - name: Wait for SP-API rate limit recovery
         run: sleep 60
 
-      - name: Script 4 — All Orders (14 days) → Sheets
+      - name: Script 3 — All Orders (14 days) → Sheets
         run: npx tsx src/cli/orders-to-sheets.ts
 
       - name: Wait for SP-API rate limit recovery
         run: sleep 60
 
-      - name: Script 5 — Linking → Sheets
+      - name: Script 4 — Linking → Sheets
         run: npx tsx src/cli/linking-to-sheets.ts
 
       - name: Wait for SP-API rate limit recovery
         run: sleep 60
 
-      - name: Script 6 — Measurements → Sheets
+      - name: Script 5 — Measurements → Sheets
         run: npx tsx src/cli/measurements-to-sheets.ts
 
