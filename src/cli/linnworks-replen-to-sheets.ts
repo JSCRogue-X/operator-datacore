@@ -22,7 +22,7 @@ const HEADERS = [
   'SC-PalletQuantity-DE', 'EBAY PRICE', 'Default Packaging Group', 'Postage Type',
   'SC-SupplierCode', 'SC-UnitPriceUSD', 'SC-Supplier-PQ', 'SC-SupplierTitle',
   'Supplier Name',
-  'EU_Inbound_DO_Duty_Cost', 'FBA_3_Month_Storage_Cost',
+  'EU_Inbound_DD_Duty_Cost', 'FBA_3_Month_Storage_Cost',
   'FBA_UK_Inbound_Cost', 'FBA_EU_Inbound_Cost',
   'FBA_UK_Landed_Cost', 'FBA_EU_Landed_Cost',
   'AGL Detailed Description of Merchandise in English', 'AGL Material',
@@ -208,7 +208,7 @@ function buildRow(item: RawItem, loc: StockLevel): string[] {
     ext('SC-Supplier-PQ'),               // SC-Supplier-PQ
     ext('SC-SupplierTitle'),            // SC-SupplierTitle
     supplierName,                       // Supplier Name
-    ext('EU_Inbound_DO_Duty_Cost'),     // EU_Inbound_DO_Duty_Cost
+    ext('EU_Inbound_DD_Duty_Cost'),     // EU_Inbound_DD_Duty_Cost
     ext('FBA_3_Month_Storage_Cost'),    // FBA_3_Month_Storage_Cost — name TBC
     ext('FBA_UK_Inbound_Cost'),         // FBA_UK_Inbound_Cost — name TBC
     ext('FBA_EU_Inbound_Cost'),         // FBA_EU_Inbound_Cost — name TBC
