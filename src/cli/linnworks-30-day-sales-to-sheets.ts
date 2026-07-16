@@ -13,13 +13,8 @@ const TAB_NAME       = '30 Day Sales';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
-const HEADERS = ['nOrderId', 'dReceievedDate', 'OrderItemSKU', 'OrderItemQuantity'];
+const HEADERS = ['OrderItemSKU', 'TotalQuantitySold'];
 
-function formatDate(raw: string): string {
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-  if (!m) return raw;
-  return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
-}
 
 const ALLOWED_SOURCES = new Set(['EBAY', 'SHOPIFY']);
 
@@ -175,18 +170,19 @@ async function main() {
     })),
   );
 
-  const outputRows: (string | number)[][] = [];
-  for (const { order, items } of ordersWithItems) {
-    const orderId  = order.nOrderId ?? '';
-    const received = formatDate(String(order.dReceivedDate ?? ''));
-    if (!items.length) {
-      outputRows.push([orderId, received, '', '']);
-      continue;
-    }
+  // Aggregate by SKU
+  const skuTotals = new Map<string, number>();
+  for (const { items } of ordersWithItems) {
     for (const item of items) {
-      outputRows.push([orderId, received, String(item.SKU ?? ''), item.Quantity ?? '']);
+      const sku = String(item.SKU ?? '').trim();
+      if (!sku) continue;
+      skuTotals.set(sku, (skuTotals.get(sku) ?? 0) + (Number(item.Quantity) || 0));
     }
   }
+
+  const outputRows: (string | number)[][] = Array.from(skuTotals.entries())
+    .sort((a, b) => b[1] - a[1]) // best sellers first
+    .map(([sku, qty]) => [sku, qty]);
 
   console.log(`  Rows to write: ${outputRows.length}`);
 
