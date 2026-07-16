@@ -70,15 +70,17 @@ async function fetchOrders(session: LinnworksSession, fromDate: string, toDate: 
       method:  'POST',
       headers: { Authorization: session.token, 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        DateField:      'received',
-        FromDate:       fromDate,
-        ToDate:         toDate,
-        ExactMatch:     false,
-        SearchField:    '',
-        SearchTerm:     '',
-        PageNumber:     pageNumber,
-        ResultsPerPage: pageSize,
-        Filters:        null,
+        request: {
+          DateField:      'received',
+          FromDate:       fromDate,
+          ToDate:         toDate,
+          ExactMatch:     false,
+          SearchField:    '',
+          SearchTerm:     '',
+          PageNumber:     pageNumber,
+          ResultsPerPage: pageSize,
+          Filters:        null,
+        },
       }),
     });
 
