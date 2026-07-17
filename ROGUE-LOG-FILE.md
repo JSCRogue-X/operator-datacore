@@ -6,6 +6,46 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 17 July 2026
+
+**linnworks-30-day-sales-to-sheets — fully complete and redirected to IHS2**
+- Correct Linnworks items endpoint discovered: `POST Orders/GetOrderById` with `{ pkOrderId: guid }` — items in `data.Items[]`
+- Item fields confirmed: `SKU`, `Quantity`
+- Script now aggregates by ISO week start (Monday) + SKU across eBay + Shopify combined
+- Columns: Week Start (DD-MM-YYYY date value), Year, Month, Week No., SKU, Total Units
+- Week Start written as Google Sheets serial integer; column A formatted as `DD-MM-YYYY` via `repeatCell`
+- Target changed: appends to **IHS2** tab in Company Sell-through Tracker V2.1 (`1mIk4mrFisXIpen2zZpnmxHWDRtmbjX6Ikyao_EzWZ3M`) — no longer writes to Linnworks sheet
+- Uses `values.append` with `INSERT_ROWS` — adds to next available row each month, no clearing
+
+**IH Sales historical backfill — ih-sales-to-ihs2.ts**
+- One-off script: reads all 15,231 rows from IH Sales tab, aggregates by week + SKU, writes 1,949 rows to IHS2
+- Same column structure as the monthly Linnworks script
+- Run locally (not a GitHub Actions workflow)
+
+**Numeric and date formatting — all Linnworks scripts**
+- All six Linnworks scripts updated: numeric fields (stock, quantities, prices, dimensions) now written as numbers, not strings
+- OOS dates changed from "12 Jul 2026" to DD/MM/YYYY; `daysSince()` handles both formats for backward compatibility
+- `replen` and `extended-props`: `num()` helper now returns `number | ''` instead of `string`
+- `ih-stock`: weekNum and year now written as numbers
+
+**Decisions**
+- Source (eBay/Shopify) dropped from aggregation — combined into single total per SKU per week
+- Append-only to IHS2 so historical data from ih-sales-to-ihs2.ts backfill is preserved
+
+**Next session**
+- Historical backfill: add `--year`/`--month` CLI args to `linnworks-30-day-sales-to-sheets.ts` so older months can be run individually to fill in data before the backfill start date
+
+**Files changed**
+- `src/cli/linnworks-30-day-sales-to-sheets.ts` — endpoint fix, weekly aggregation, IHS2 target, append mode
+- `src/cli/ih-sales-to-ihs2.ts` — new backfill script
+- `src/cli/linnworks-oos-to-sheets.ts` — date format DD/MM/YYYY, numbers as numbers
+- `src/cli/linnworks-replen-to-sheets.ts` — num() helper returns numbers
+- `src/cli/linnworks-extended-props-to-sheets.ts` — same
+- `src/cli/linnworks-company-st-to-sheets.ts` — Available/MinimumLevel as numbers
+- `src/cli/linnworks-ih-stock-to-sheets.ts` — weekNum/year as numbers
+
+---
+
 ### 15 July 2026 (continued)
 
 **Linnworks OOS → Google Sheets — category + never-stocked filters added (confirmed working)**
