@@ -8,12 +8,10 @@ import 'dotenv/config';
 import { google } from 'googleapis';
 import pLimit from 'p-limit';
 
-const SPREADSHEET_ID = '1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ';
-const TAB_NAME       = '30 Day Sales';
+const SPREADSHEET_ID = '1mIk4mrFisXIpen2zZpnmxHWDRtmbjX6Ikyao_EzWZ3M';
+const TAB_NAME       = 'IHS2';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
-
-const HEADERS = ['Week Start', 'Year', 'Month', 'Week No.', 'SKU', 'Total Units'];
 
 const ALLOWED_SOURCES = new Set(['EBAY', 'SHOPIFY']);
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -235,47 +233,16 @@ async function main() {
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const existingTab = spreadsheet.data.sheets?.find(s => s.properties?.title === TAB_NAME);
-  let sheetId: number;
-
-  if (!existingTab) {
-    console.log(`  Creating "${TAB_NAME}" tab...`);
-    const addResp = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: TAB_NAME } } }] },
-    });
-    sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
-  } else {
-    sheetId = existingTab.properties?.sheetId ?? 0;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
-    requestBody: {
-      requests: [
-        // Clear existing content
-        { updateCells: { range: { sheetId }, fields: 'userEnteredValue' } },
-        // Format column A (Week Start) as DD-MM-YYYY date
-        {
-          repeatCell: {
-            range:  { sheetId, startColumnIndex: 0, endColumnIndex: 1, startRowIndex: 1 },
-            cell:   { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'DD-MM-YYYY' } } },
-            fields: 'userEnteredFormat.numberFormat',
-          },
-        },
-      ],
-    },
-  });
-
-  await sheets.spreadsheets.values.update({
+  // Append to next available row — no clearing, no headers
+  await sheets.spreadsheets.values.append({
     spreadsheetId:    SPREADSHEET_ID,
-    range:            `${TAB_NAME}!A1`,
+    range:            `${TAB_NAME}!A:A`,
     valueInputOption: 'RAW',
-    requestBody:      { values: [HEADERS, ...outputRows] },
+    insertDataOption: 'INSERT_ROWS',
+    requestBody:      { values: outputRows },
   });
 
-  console.log(`  Done — ${outputRows.length} row(s) written to "${TAB_NAME}".`);
+  console.log(`  Done — ${outputRows.length} row(s) appended to "${TAB_NAME}".`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
