@@ -271,19 +271,19 @@ def write_to_sheets(summary_rows, detail_rows):
 def main():
     client = LinnworksClient(APP_ID, APP_SECRET, TOKEN)
 
-    # ── Fetch locations ────────────────────────────────────────────────────────
-    locations = client.get_locations()
-    if locations:
-        for loc in locations:
-            print(f"  Location: {loc.get('LocationName') or loc.get('Name') or loc} → {loc.get('StockLocationId') or loc.get('Id') or '?'}", flush=True)
-    else:
-        print("  No locations returned (will call history without locationId)", flush=True)
-    # Use first location ID for history calls (locationId appears to be required in practice)
-    location_id = None
-    if locations:
-        loc = locations[0]
-        location_id = loc.get("StockLocationId") or loc.get("Id") or None
-        print(f"  Using locationId: {location_id}", flush=True)
+    # ── Fetch Ogden Fulfilment location ID ────────────────────────────────────
+    NULL_GUID = "00000000-0000-0000-0000-000000000000"
+    raw_locs  = client.get_locations()
+    ogden_location_id = None
+    for loc in raw_locs:
+        loc_id   = loc.get("StockLocationId") or loc.get("Id") or ""
+        loc_name = loc.get("LocationName") or loc.get("Name") or ""
+        if "ogden" in loc_name.lower() and loc_id.lower() != NULL_GUID:
+            ogden_location_id = loc_id
+            print(f"  Using location: {loc_name} → {loc_id}", flush=True)
+            break
+    if not ogden_location_id:
+        print("  WARNING: Ogden Fulfilment location not found — history calls may fail", flush=True)
     # ──────────────────────────────────────────────────────────────────────────
 
     print("\nFetching all stock items...")
@@ -304,7 +304,7 @@ def main():
             print(f"  Processing {i + 1}/{len(items)}: {sku}")
 
         try:
-            history = client.get_stock_history(item_id, location_id=location_id)
+            history = client.get_stock_history(item_id, location_id=ogden_location_id)
         except Exception as e:
             if (i + 1) <= 5:
                 print(f"  WARN [{i+1}]: {sku or item_id}: {e}", flush=True)
