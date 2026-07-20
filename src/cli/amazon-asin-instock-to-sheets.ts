@@ -74,6 +74,14 @@ async function main() {
 
   console.log(`  ${asinMap.size} unique ASIN(s).`);
 
+  // NL, IE, BE are PAN-EU fulfilled from DE — mirror DE stock where local qty is 0
+  for (const { stock } of asinMap.values()) {
+    const deStock = stock['DE'] ?? 0;
+    for (const m of ['NL', 'IE', 'BE'] as const) {
+      if ((stock[m] ?? 0) === 0 && deStock > 0) stock[m] = deStock;
+    }
+  }
+
   // ── Build output rows ───────────────────────────────────────────────────
   const outputRows: (string | number)[][] = Array.from(asinMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
