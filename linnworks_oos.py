@@ -169,8 +169,6 @@ class LinnworksClient:
                 "searchTypes":          ["SKU", "Title", "Barcode"],
             })
             if isinstance(data, list):
-                if not items and data:
-                    print(f"  DEBUG first item keys: {sorted(data[0].keys())}", flush=True)
                 items.extend(data)
                 print(f"  Stock items: {len(items)} total")
                 break
@@ -314,7 +312,7 @@ def main():
     detail_rows  = []
 
     for i, item in enumerate(items):
-        sku     = item.get("SKU") or ""
+        sku     = item.get("ItemNumber") or item.get("SKU") or ""
         title   = item.get("ItemTitle") or item.get("Title") or ""
         item_id = item.get("StockItemId") or item.get("Id") or ""
         if not item_id:
