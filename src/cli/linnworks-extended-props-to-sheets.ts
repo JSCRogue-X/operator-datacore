@@ -160,7 +160,7 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     ext('SC-SupplierCode'),             // SC-SupplierCode
     ext('SC-CartonWeight'),             // SC-CartonWeight
     ext('CountryOfOrigin'),             // CountryOfOrigin
-    ext('SC-PalletQuantity'),           // SC-PalletQuantity
+    ext('SC-PalletQuantity-UK'),         // SC-PalletQuantity
     ext('SC-StorageType'),              // SC-StorageType
     ext('CaseSize'),                    // CaseSize
     ext('SC-PalletCartons'),            // SC-PalletCartons
