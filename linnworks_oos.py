@@ -175,17 +175,27 @@ class LinnworksClient:
         return items
 
     def get_stock_history(self, stock_item_id, location_id=None):
-        params = {
-            "stockItemId":    stock_item_id,
-            "pageNumber":     -1,
-            "entriesPerPage": 10000,
-        }
-        if location_id:
-            params["locationId"] = location_id
-        data = self._get("/api/Stock/GetItemChangesHistory", params)
-        if isinstance(data, list):
-            return data
-        return data.get("Data", [])
+        all_entries, page = [], 1
+        while True:
+            params = {
+                "stockItemId":    stock_item_id,
+                "pageNumber":     page,
+                "entriesPerPage": 500,
+            }
+            if location_id:
+                params["locationId"] = location_id
+            data = self._get("/api/Stock/GetItemChangesHistory", params)
+            if isinstance(data, list):
+                all_entries.extend(data)
+                break
+            entries     = data.get("Data", [])
+            total_pages = data.get("TotalPages", 1)
+            all_entries.extend(entries)
+            if page >= total_pages:
+                break
+            page += 1
+            time.sleep(0.1)
+        return all_entries
 
 # ── OOS calculation ───────────────────────────────────────────────────────────
 
