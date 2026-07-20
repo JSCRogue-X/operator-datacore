@@ -1,38 +1,52 @@
 #!/usr/bin/env tsx
 // amazon-asin-instock-to-sheets.ts
-// Reads the "Active Listings" tab and writes a per-ASIN in-stock summary
-// (UK vs EU) to the "ASIN Ins" tab in the Automations spreadsheet.
+// Reads the "Amazon Data" FBA history tab and calculates per-ASIN in-stock
+// rates (% of tracked days with available stock) for UK and EU separately.
+// Writes a summary + per-ASIN table to the "ASIN Ins" tab.
 // Run: npx tsx src/cli/amazon-asin-instock-to-sheets.ts
 
 import 'dotenv/config';
 import { google } from 'googleapis';
 
-const SPREADSHEET_ID = '1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4';
-const SOURCE_TAB     = 'Active Listings';
-const DEST_TAB       = 'ASIN Ins';
-const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
+// Source: FBA history sheet (populated daily by fba-to-sheets)
+const HISTORY_SHEET_ID = '1fXuMl9PkmMxxpkQwHxtVj-3OprVTc7_cNzG4O_m4fXg';
+const HISTORY_TAB      = 'Amazon Data';
+
+// Destination: Automations sheet, ASIN Ins tab
+const DEST_SHEET_ID = '1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4';
+const DEST_TAB      = 'ASIN Ins';
+
+const HISTORY_DAYS = 30;
+const KEY_FILE     = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
-const EU_MARKETS = ['DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'IE', 'BE'] as const;
-type EUMarket = typeof EU_MARKETS[number];
+// Column positions in Amazon Data (0-based)
+const HIST_SNAPSHOT = 0;  // snapshot-date (DD/MM/YYYY)
+const HIST_SKU      = 1;  // sku
+const HIST_ASIN     = 3;  // asin
+const HIST_AVAIL    = 6;  // available (FBA fulfillable qty)
+const HIST_MARKET   = 34; // marketplace (DE, GB, UK, ES, IT, FR)
 
-const HEADERS = [
-  'ASIN', 'SKU',
-  'UK Stock', 'UK In-Stock',
-  'EU Mkts In-Stock %', 'EU Mkts Count',
-  'DE Stock', 'FR Stock', 'IT Stock', 'ES Stock',
-  'NL Stock', 'SE Stock', 'IE Stock', 'BE Stock',
-];
+// UK codes used in the history (normalised to one label)
+const UK_CODES = new Set(['GB', 'UK']);
+// EU market codes present in the history
+const EU_CODES = new Set(['DE', 'ES', 'IT', 'FR']);
+// NL/IE/BE are PAN-EU (not in FBA history) — covered by DE availability
 
-// Active Listings column indices (0-based, from A:H)
-const COL_SKU        = 0; // A — seller-sku
-const COL_ASIN       = 1; // B — ASIN
-const COL_MARKET     = 2; // C — Marketplace Country Code
-const COL_AVAILABLE  = 4; // E — FBA fulfillable quantity (local)
+const INSTOCK_HEADERS = ['ASIN', 'SKU', 'UK In-Stock %', 'EU In-Stock %', 'UK In-Stock', 'EU In-Stock'];
+
+function parseUKDate(s: string): Date | null {
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
+}
 
 async function main() {
   console.log('Amazon ASIN In-Stock Tracker → Google Sheets');
   console.log('---------------------------------------------');
+
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - HISTORY_DAYS);
 
   const auth = new google.auth.GoogleAuth({
     keyFile: KEY_FILE,
@@ -40,129 +54,169 @@ async function main() {
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // ── Read Active Listings ────────────────────────────────────────────────
-  console.log(`Reading "${SOURCE_TAB}"...`);
-  const res  = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range:         `${SOURCE_TAB}!A:H`,
+  // ── 1. Read FBA history ───────────────────────────────────────────────
+  console.log(`Reading "${HISTORY_TAB}" from FBA history sheet...`);
+  const histRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: HISTORY_SHEET_ID,
+    range:         `${HISTORY_TAB}!A:AI`, // columns 0–34 covers all we need
   });
-  const rows = (res.data.values ?? []).slice(1); // skip header row
-  console.log(`  ${rows.length} data row(s) found.`);
+  const histRows = (histRes.data.values ?? []).slice(1);
+  console.log(`  ${histRows.length} total row(s).`);
 
-  // ── Aggregate by ASIN ───────────────────────────────────────────────────
-  interface AsinData {
-    sku:   string;
-    stock: Partial<Record<string, number>>;
-  }
-  const asinMap = new Map<string, AsinData>();
+  // ── 2. Build per-ASIN history within the window ───────────────────────
+  // asin → date → { uk: number, eu: Map<string,number> }
+  interface DayData { uk: number; eu: Map<string, number> }
+  const asinHistory = new Map<string, Map<string, DayData>>();
+  const asinSku     = new Map<string, string>();
 
-  for (const row of rows) {
-    const sku       = String(row[COL_SKU]       ?? '').trim();
-    const asin      = String(row[COL_ASIN]      ?? '').trim();
-    const market    = String(row[COL_MARKET]    ?? '').trim().toUpperCase();
-    const available = Number(row[COL_AVAILABLE]) || 0;
+  let inWindow = 0;
+  for (const row of histRows) {
+    const dateStr  = String(row[HIST_SNAPSHOT] ?? '').trim();
+    const asin     = String(row[HIST_ASIN]     ?? '').trim();
+    const sku      = String(row[HIST_SKU]      ?? '').trim();
+    const market   = String(row[HIST_MARKET]   ?? '').trim().toUpperCase();
+    const avail    = Number(row[HIST_AVAIL])   || 0;
 
-    if (!asin || !market) continue;
+    if (!dateStr || !asin || !market) continue;
 
-    let entry = asinMap.get(asin);
-    if (!entry) {
-      entry = { sku, stock: {} };
-      asinMap.set(asin, entry);
+    const d = parseUKDate(dateStr);
+    if (!d || d < cutoff) continue;
+    inWindow++;
+
+    if (!asinSku.has(asin)) asinSku.set(asin, sku);
+
+    let byDate = asinHistory.get(asin);
+    if (!byDate) { byDate = new Map(); asinHistory.set(asin, byDate); }
+
+    let day = byDate.get(dateStr);
+    if (!day) { day = { uk: 0, eu: new Map() }; byDate.set(dateStr, day); }
+
+    if (UK_CODES.has(market)) {
+      day.uk = Math.max(day.uk, avail);
+    } else if (EU_CODES.has(market)) {
+      day.eu.set(market, avail);
     }
-    entry.stock[market] = available;
   }
 
-  console.log(`  ${asinMap.size} unique ASIN(s).`);
+  console.log(`  ${inWindow} row(s) within last ${HISTORY_DAYS} days.`);
+  console.log(`  ${asinHistory.size} unique ASIN(s) with history.`);
 
-  // NL, IE, BE are PAN-EU fulfilled from DE — mirror DE stock where local qty is 0
-  for (const { stock } of asinMap.values()) {
-    const deStock = stock['DE'] ?? 0;
-    for (const m of ['NL', 'IE', 'BE'] as const) {
-      if ((stock[m] ?? 0) === 0 && deStock > 0) stock[m] = deStock;
-    }
+  // ── 3. Calculate in-stock rates ───────────────────────────────────────
+  interface ResultRow {
+    asin:    string;
+    sku:     string;
+    ukPct:   number;
+    euPct:   number;
+    ukToday: boolean;
+    euToday: boolean;
   }
 
-  // ── Build output rows + summary stats ──────────────────────────────────
-  let ukInStockCount  = 0;
-  let euMktsTotalPct  = 0;
-  const totalAsins    = asinMap.size;
+  // Find the most recent date in the window to use as "current" status
+  const allDates = new Set<string>();
+  for (const byDate of asinHistory.values()) {
+    for (const dt of byDate.keys()) allDates.add(dt);
+  }
+  const latestDate = [...allDates]
+    .map(s => ({ s, d: parseUKDate(s)! }))
+    .filter(x => x.d)
+    .sort((a, b) => b.d.getTime() - a.d.getTime())[0]?.s ?? '';
 
-  const outputRows: (string | number)[][] = Array.from(asinMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([asin, { sku, stock }]) => {
-      const ukStock   = stock['GB'] ?? 0;
-      const ukInStock = ukStock > 0 ? 'Yes' : 'No';
-      if (ukStock > 0) ukInStockCount++;
+  console.log(`  Most recent snapshot date: ${latestDate}`);
 
-      let euCount = 0;
-      for (const m of EU_MARKETS) {
-        if ((stock[m] ?? 0) > 0) euCount++;
+  const results: ResultRow[] = [];
+
+  for (const [asin, byDate] of asinHistory) {
+    const sku       = asinSku.get(asin) ?? '';
+    const totalDays = byDate.size;
+    let ukDays = 0;
+    let euDays = 0;
+
+    for (const day of byDate.values()) {
+      if (day.uk > 0) ukDays++;
+
+      // EU in-stock: any EU market (DE also covers NL/IE/BE via PAN-EU)
+      let euInStock = false;
+      for (const qty of day.eu.values()) {
+        if (qty > 0) { euInStock = true; break; }
       }
-      const euPct = Math.round((euCount / EU_MARKETS.length) * 100);
-      euMktsTotalPct += euPct;
+      if (euInStock) euDays++;
+    }
 
-      return [
-        asin,
-        sku,
-        ukStock,
-        ukInStock,
-        euPct,
-        `${euCount} of ${EU_MARKETS.length}`,
-        stock['DE'] ?? 0,
-        stock['FR'] ?? 0,
-        stock['IT'] ?? 0,
-        stock['ES'] ?? 0,
-        stock['NL'] ?? 0,
-        stock['SE'] ?? 0,
-        stock['IE'] ?? 0,
-        stock['BE'] ?? 0,
-      ];
-    });
+    const ukPct = totalDays > 0 ? Math.round((ukDays / totalDays) * 100) : 0;
+    const euPct = totalDays > 0 ? Math.round((euDays / totalDays) * 100) : 0;
 
-  const ukRate = totalAsins > 0 ? Math.round((ukInStockCount / totalAsins) * 100) : 0;
-  const euRate = totalAsins > 0 ? Math.round(euMktsTotalPct  / totalAsins)        : 0;
+    // Current status from the latest snapshot date
+    const latestDay = byDate.get(latestDate);
+    const ukToday   = (latestDay?.uk ?? 0) > 0;
+    let euToday = false;
+    if (latestDay) {
+      for (const qty of latestDay.eu.values()) {
+        if (qty > 0) { euToday = true; break; }
+      }
+    }
 
-  // Summary block written above the per-ASIN table (rows 1–4, then blank, then headers)
+    results.push({ asin, sku, ukPct, euPct, ukToday, euToday });
+  }
+
+  results.sort((a, b) => a.asin.localeCompare(b.asin));
+
+  // ── 4. Build summary and output rows ──────────────────────────────────
+  const total          = results.length;
+  const ukInStockCount = results.filter(r => r.ukToday).length;
+  const euInStockCount = results.filter(r => r.euToday).length;
+  const ukSummaryRate  = total > 0 ? Math.round((ukInStockCount / total) * 100) : 0;
+  const euSummaryRate  = total > 0 ? Math.round((euInStockCount / total) * 100) : 0;
+
   const summaryRows: (string | number)[][] = [
-    ['',                  'UK',       'EU (avg across all markets)'],
-    ['In-Stock Rate',     ukRate,     euRate],
-    ['ASINs in-stock',    ukInStockCount, ''],
-    ['Total ASINs',       totalAsins, totalAsins],
+    ['',               'UK',           'EU'],
+    ['In-Stock Rate',  ukSummaryRate,  euSummaryRate],
+    ['ASINs in-stock', ukInStockCount, euInStockCount],
+    ['Total ASINs',    total,          total],
+    [`In-Stock % = % of days in stock over last ${HISTORY_DAYS} days`],
     [],
   ];
 
-  console.log(`  UK in-stock rate: ${ukRate}%  EU in-stock rate: ${euRate}%`);
+  const outputRows: (string | number)[][] = results.map(r => [
+    r.asin,
+    r.sku,
+    r.ukPct,
+    r.euPct,
+    r.ukToday ? 'Yes' : 'No',
+    r.euToday ? 'Yes' : 'No',
+  ]);
+
+  console.log(`  UK: ${ukSummaryRate}% (${ukInStockCount}/${total} ASINs)  EU: ${euSummaryRate}% (${euInStockCount}/${total} ASINs)`);
   console.log(`  ${outputRows.length} ASIN row(s) to write.`);
 
-  // ── Write to ASIN Ins tab ───────────────────────────────────────────────
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const existingTab = spreadsheet.data.sheets?.find(s => s.properties?.title === DEST_TAB);
+  // ── 5. Write to ASIN Ins tab ───────────────────────────────────────────
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: DEST_SHEET_ID });
+  const destTab     = spreadsheet.data.sheets?.find(s => s.properties?.title === DEST_TAB);
   let sheetId: number;
 
-  if (!existingTab) {
+  if (!destTab) {
     console.log(`  Creating "${DEST_TAB}" tab...`);
     const addResp = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId: DEST_SHEET_ID,
       requestBody:   { requests: [{ addSheet: { properties: { title: DEST_TAB } } }] },
     });
     sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
   } else {
-    sheetId = existingTab.properties?.sheetId ?? 0;
+    sheetId = destTab.properties?.sheetId ?? 0;
   }
 
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEST_SHEET_ID,
     requestBody:   { requests: [{ updateCells: { range: { sheetId }, fields: 'userEnteredValue' } }] },
   });
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId:    SPREADSHEET_ID,
+    spreadsheetId:    DEST_SHEET_ID,
     range:            `${DEST_TAB}!A1`,
     valueInputOption: 'RAW',
-    requestBody:      { values: [...summaryRows, HEADERS, ...outputRows] },
+    requestBody:      { values: [...summaryRows, INSTOCK_HEADERS, ...outputRows] },
   });
 
-  console.log(`  Done — ${outputRows.length} ASIN(s) written to "${DEST_TAB}".`);
+  console.log(`  Done — "${DEST_TAB}" written.`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
