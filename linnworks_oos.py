@@ -136,7 +136,7 @@ class LinnworksClient:
                     time.sleep(wait)
                     continue
                 if not resp.ok:
-                    print(f"  HTTP {resp.status_code} {path}: {resp.text[:500]}", flush=True)
+                    print(f"  HTTP {resp.status_code} {path}: {resp.text}", flush=True)
                 resp.raise_for_status()
                 return resp.json()
             except requests.RequestException:
@@ -262,6 +262,19 @@ def write_to_sheets(summary_rows, detail_rows):
 
 def main():
     client = LinnworksClient(APP_ID, APP_SECRET, TOKEN)
+
+    # ── Diagnostic: probe GetItemChangesHistory before processing ──────────────
+    print("\n--- DIAGNOSTIC: testing GetItemChangesHistory ---")
+    try:
+        resp = client.session.get(
+            f"{client.server}/api/Stock/GetItemChangesHistory",
+            timeout=30,
+        )
+        print(f"  No-param call → {resp.status_code}: {resp.text[:1000]}", flush=True)
+    except Exception as e:
+        print(f"  No-param call failed: {e}", flush=True)
+    print("--- END DIAGNOSTIC ---\n")
+    # ──────────────────────────────────────────────────────────────────────────
 
     print("\nFetching all stock items...")
     items = client.get_all_stock_items()
