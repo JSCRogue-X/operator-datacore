@@ -168,6 +168,10 @@ class LinnworksClient:
                 "dataRequirements":     [],
                 "searchTypes":          ["SKU", "Title", "Barcode"],
             })
+            if isinstance(data, list):
+                items.extend(data)
+                print(f"  Stock items: {len(items)} total")
+                break
             batch = data.get("Items", data.get("Data", []))
             items.extend(batch)
             total_pages = data.get("TotalPages", 1)
