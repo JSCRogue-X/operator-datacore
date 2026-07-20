@@ -150,6 +150,12 @@ class LinnworksClient:
     def _post(self, path, body=None, retries=3):
         return self._request("POST", path, body=body, retries=retries)
 
+    def get_locations(self):
+        data = self._get("/api/Inventory/GetStockLocations")
+        if isinstance(data, list):
+            return data
+        return data.get("Data", []) if isinstance(data, dict) else []
+
     def get_all_stock_items(self):
         items, page = [], 1
         while True:
@@ -168,13 +174,15 @@ class LinnworksClient:
             time.sleep(0.15)
         return items
 
-    def get_stock_history(self, stock_item_id):
-        # pageNumber=-1 returns all history in one call (Linnworks API spec)
-        data = self._get("/api/Stock/GetItemChangesHistory", {
+    def get_stock_history(self, stock_item_id, location_id=None):
+        params = {
             "stockItemId":    stock_item_id,
             "pageNumber":     -1,
             "entriesPerPage": 10000,
-        })
+        }
+        if location_id:
+            params["locationId"] = location_id
+        data = self._get("/api/Stock/GetItemChangesHistory", params)
         if isinstance(data, list):
             return data
         return data.get("Data", [])
@@ -263,17 +271,19 @@ def write_to_sheets(summary_rows, detail_rows):
 def main():
     client = LinnworksClient(APP_ID, APP_SECRET, TOKEN)
 
-    # ── Diagnostic: probe GetItemChangesHistory before processing ──────────────
-    print("\n--- DIAGNOSTIC: testing GetItemChangesHistory ---")
-    try:
-        resp = client.session.get(
-            f"{client.server}/api/Stock/GetItemChangesHistory",
-            timeout=30,
-        )
-        print(f"  No-param call → {resp.status_code}: {resp.text[:1000]}", flush=True)
-    except Exception as e:
-        print(f"  No-param call failed: {e}", flush=True)
-    print("--- END DIAGNOSTIC ---\n")
+    # ── Fetch locations ────────────────────────────────────────────────────────
+    locations = client.get_locations()
+    if locations:
+        for loc in locations:
+            print(f"  Location: {loc.get('LocationName') or loc.get('Name') or loc} → {loc.get('StockLocationId') or loc.get('Id') or '?'}", flush=True)
+    else:
+        print("  No locations returned (will call history without locationId)", flush=True)
+    # Use first location ID for history calls (locationId appears to be required in practice)
+    location_id = None
+    if locations:
+        loc = locations[0]
+        location_id = loc.get("StockLocationId") or loc.get("Id") or None
+        print(f"  Using locationId: {location_id}", flush=True)
     # ──────────────────────────────────────────────────────────────────────────
 
     print("\nFetching all stock items...")
@@ -294,7 +304,7 @@ def main():
             print(f"  Processing {i + 1}/{len(items)}: {sku}")
 
         try:
-            history = client.get_stock_history(item_id)
+            history = client.get_stock_history(item_id, location_id=location_id)
         except Exception as e:
             if (i + 1) <= 5:
                 print(f"  WARN [{i+1}]: {sku or item_id}: {e}", flush=True)
