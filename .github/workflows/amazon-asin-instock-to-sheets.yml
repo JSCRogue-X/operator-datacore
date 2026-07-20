@@ -1,0 +1,36 @@
+name: Amazon ASIN In-Stock Tracker
+
+on:
+  workflow_run:
+    workflows: ['Daily Active Listings Update']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  asin-instock:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: ASIN In-Stock Tracker → Sheets
+        run: npx tsx src/cli/amazon-asin-instock-to-sheets.ts
