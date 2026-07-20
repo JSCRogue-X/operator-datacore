@@ -139,6 +139,23 @@ class LinnworksClient:
                     raise
                 time.sleep(2 ** attempt)
 
+    def _post(self, path, body=None, retries=3):
+        url = f"{self.server}{path}"
+        for attempt in range(retries):
+            try:
+                resp = self.session.post(url, json=body or {}, timeout=60)
+                if resp.status_code == 429:
+                    wait = int(resp.headers.get("Retry-After", 5))
+                    print(f"  Rate limited — waiting {wait}s")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except requests.RequestException:
+                if attempt == retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+
     def get_all_stock_items(self):
         items, page = [], 1
         while True:
@@ -160,7 +177,7 @@ class LinnworksClient:
     def get_stock_history(self, stock_item_id):
         all_entries, page = [], 1
         while True:
-            data = self._get("/api/Stock/GetItemChangesHistory", {
+            data = self._post("/api/Stock/GetItemChangesHistory", {
                 "stockItemId":    stock_item_id,
                 "entriesPerPage": 500,
                 "pageNumber":     page,
