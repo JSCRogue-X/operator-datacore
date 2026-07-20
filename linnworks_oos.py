@@ -117,7 +117,7 @@ class LinnworksClient:
         )
         resp.raise_for_status()
         data = resp.json()
-        self.access_token = data["AccessToken"]
+        self.access_token = data["Token"]
         self.server       = data["Server"].rstrip("/")
         self.session.headers.update({"Authorization": self.access_token})
         print(f"Authenticated. Server: {self.server}")
