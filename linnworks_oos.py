@@ -169,6 +169,8 @@ class LinnworksClient:
                 "searchTypes":          ["SKU", "Title", "Barcode"],
             })
             if isinstance(data, list):
+                if not items and data:
+                    print(f"  DEBUG first item keys: {sorted(data[0].keys())}", flush=True)
                 items.extend(data)
                 print(f"  Stock items: {len(items)} total")
                 break
