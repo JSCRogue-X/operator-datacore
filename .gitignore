@@ -39,3 +39,6 @@ backfill-*.csv
 # Google service account keys — never commit these
 *-key.json
 spincare-sheets-key.json
+
+# Local Python output files
+linnworks_oos_*.xlsx

@@ -1,0 +1,34 @@
+name: Linnworks OOS Days Analysis
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oos-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      LINNWORKS_APP_ID:     ${{ secrets.LINNWORKS_APP_ID }}
+      LINNWORKS_APP_SECRET: ${{ secrets.LINNWORKS_APP_SECRET }}
+      LINNWORKS_TOKEN:      ${{ secrets.LINNWORKS_INSTALL_TOKEN }}
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install requests google-api-python-client google-auth
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Linnworks OOS Analysis → Sheets
+        run: python linnworks_oos.py
