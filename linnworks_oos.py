@@ -136,7 +136,7 @@ class LinnworksClient:
                     time.sleep(wait)
                     continue
                 if not resp.ok:
-                    print(f"  HTTP {resp.status_code} {path}: {resp.text}", flush=True)
+                    print(f"  HTTP {resp.status_code} {path}", flush=True)
                 resp.raise_for_status()
                 return resp.json()
             except requests.RequestException:
