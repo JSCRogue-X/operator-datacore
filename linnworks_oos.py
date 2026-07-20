@@ -159,12 +159,16 @@ class LinnworksClient:
     def get_all_stock_items(self):
         items, page = [], 1
         while True:
-            data = self._get("/api/Stock/GetStockItems", {
-                "keyWord": "", "entriesPerPage": 200, "pageNumber": page,
-                "excludeComposites": "false", "excludeVariations": "false",
-                "excludeBatches": "false",
+            data = self._post("/api/Stock/GetStockItemsFull", {
+                "keyword":              "",
+                "loadCompositeParents": False,
+                "loadVariationParents": False,
+                "entriesPerPage":       200,
+                "pageNumber":           page,
+                "dataRequirements":     [],
+                "searchTypes":          ["SKU", "Title", "Barcode"],
             })
-            batch = data.get("Data", [])
+            batch = data.get("Items", data.get("Data", []))
             items.extend(batch)
             total_pages = data.get("TotalPages", 1)
             print(f"  Stock items page {page}/{total_pages} ({len(items)} so far)")
@@ -305,7 +309,7 @@ def main():
 
     for i, item in enumerate(items):
         sku     = item.get("SKU") or ""
-        title   = item.get("Title") or ""
+        title   = item.get("ItemTitle") or item.get("Title") or ""
         item_id = item.get("StockItemId") or item.get("Id") or ""
         if not item_id:
             continue
