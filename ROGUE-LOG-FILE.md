@@ -6,6 +6,34 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 20 July 2026
+
+**Linnworks OOS Days Analysis → Google Sheets — new script, fully working**
+- New Python script `linnworks_oos.py` + GitHub Actions workflow `linnworks-oos-analysis.yml`
+- Calculates total OOS days per SKU at Ogden Fulfilment over a 3-year window, broken down by year
+- Writes Summary (SKU, Title, Total OOS Days, 2023–2026 columns) + Detail (per OOS period) to "Output" tab in Linnworks sheet
+- Run manually via `workflow_dispatch` in GitHub Actions
+
+**Bugs fixed during build (all in `linnworks_oos.py`)**
+- Auth: `data["AccessToken"]` → `data["Token"]` — Linnworks returns session token in `Token` field
+- History method: `GetItemChangesHistory` is a GET endpoint; POST returns 400
+- Location: endpoint silently requires `locationId` — fetches Ogden Fulfilment GUID at startup via `GetInventory/GetStockLocations`
+- pageNumber: must be ≥ 1; spec claim that `-1` returns all pages is wrong
+- Stock items endpoint: switched from `GetStockItems` (no SKU/Title) to `GetStockItemsFull` (POST)
+- Response structure: `GetStockItemsFull` returns a plain list, not `{"Data": [...]}` 
+- SKU field: `GetStockItemsFull` uses `ItemNumber`, not `SKU`
+
+**Decisions**
+- History pulled from Ogden Fulfilment location only (not FBA locations)
+- No scheduling set up — run on demand
+
+**Files created/changed**
+- `linnworks_oos.py` — new Python OOS analysis script
+- `.github/workflows/linnworks-oos-analysis.yml` — new GitHub Actions workflow
+- `.gitignore` — added `linnworks_oos_*.xlsx`
+
+---
+
 ### 17 July 2026
 
 **linnworks-30-day-sales-to-sheets — fully complete and redirected to IHS2**
