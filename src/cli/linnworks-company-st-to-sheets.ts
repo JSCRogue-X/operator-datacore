@@ -12,13 +12,15 @@ const TAB_NAME       = 'Company ST';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
-const HEADERS = [
-  'SKU',
-  'Item Title',
-  'Stock available level at location',
-  'FBA SKU',
-  'Stock minimum level at location',
-];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function isoWeek(d: Date): number {
+  const date   = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
 
 const EXCLUDED_CATEGORIES = new Set(['Stationary', 'Discontinued SPINCARE', 'Default']);
 
@@ -124,8 +126,19 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Linnworks Company ST → Google Sheets');
-  console.log('-------------------------------------');
+  console.log('Linnworks Company ST → Google Sheets (append)');
+  console.log('----------------------------------------------');
+
+  const now     = new Date();
+  const dd      = String(now.getDate()).padStart(2, '0');
+  const mm      = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy    = now.getFullYear();
+  const dateStr = `${dd}/${mm}/${yyyy}`;
+  const weekNum = isoWeek(now);
+  const month   = MONTHS[now.getMonth()];
+  const dateAlt = `${yyyy}${mm}`;
+
+  console.log(`  Snapshot: ${dateStr}  Week: ${weekNum}  Month: ${month}`);
 
   console.log('Authenticating with Linnworks...');
   const session = await getLinnworksSession();
@@ -136,6 +149,7 @@ async function main() {
   console.log(`  Found ${itemsWithLoc.length} item(s).`);
 
   const outputRows = itemsWithLoc
+    .sort((a, b) => a.item.ItemNumber.localeCompare(b.item.ItemNumber))
     .map(({ item, loc }) => {
       const extMap = new Map<string, string>();
       for (const p of item.ItemExtendedProperties ?? []) {
@@ -149,9 +163,13 @@ async function main() {
         loc.Available,
         extMap.get('FBA SKU') ?? '',
         loc.MinimumLevel ?? '',
+        dateStr,
+        weekNum,
+        yyyy,
+        month,
+        dateAlt,
       ];
-    })
-    .sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')));
+    });
 
   // ── Google Sheets ──────────────────────────────────────────────────────
   const auth = new google.auth.GoogleAuth({
@@ -160,34 +178,15 @@ async function main() {
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const existingTab = spreadsheet.data.sheets?.find(s => s.properties?.title === TAB_NAME);
-  let sheetId: number;
-
-  if (!existingTab) {
-    console.log(`  Creating "${TAB_NAME}" tab...`);
-    const addResp = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: TAB_NAME } } }] },
-    });
-    sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
-  } else {
-    sheetId = existingTab.properties?.sheetId ?? 0;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
-    requestBody: { requests: [{ updateCells: { range: { sheetId }, fields: 'userEnteredValue' } }] },
-  });
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${TAB_NAME}!A1`,
+  await sheets.spreadsheets.values.append({
+    spreadsheetId:    SPREADSHEET_ID,
+    range:            `${TAB_NAME}!A:A`,
     valueInputOption: 'RAW',
-    requestBody: { values: [HEADERS, ...outputRows] },
+    insertDataOption: 'INSERT_ROWS',
+    requestBody:      { values: outputRows },
   });
 
-  console.log(`  Done — ${outputRows.length} row(s) written to "${TAB_NAME}".`);
+  console.log(`  Done — ${outputRows.length} row(s) appended to "${TAB_NAME}".`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
