@@ -171,11 +171,15 @@ class LinnworksClient:
     def get_stock_history(self, stock_item_id):
         all_entries, page = [], 1
         while True:
-            data = self._post("/api/Stock/GetItemChangesHistory", {
-                "stockItemId":    stock_item_id,
-                "entriesPerPage": 500,
-                "pageNumber":     page,
+            data = self._get("/api/Stock/GetItemChangesHistory", {
+                "stockItemId": stock_item_id,
+                "pageNumber":  page,
+                "pageSize":    500,
             })
+            # Response may be a plain list or {"Data": [...], "TotalPages": N}
+            if isinstance(data, list):
+                all_entries.extend(data)
+                break
             entries     = data.get("Data", [])
             total_pages = data.get("TotalPages", 1)
             all_entries.extend(entries)
