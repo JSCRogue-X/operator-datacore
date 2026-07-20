@@ -19,7 +19,7 @@ type EUMarket = typeof EU_MARKETS[number];
 const HEADERS = [
   'ASIN', 'SKU',
   'UK Stock', 'UK In-Stock',
-  'EU In-Stock %', 'EU Count',
+  'EU Mkts In-Stock %', 'EU Mkts Count',
   'DE Stock', 'FR Stock', 'IT Stock', 'ES Stock',
   'NL Stock', 'SE Stock', 'IE Stock', 'BE Stock',
 ];
@@ -82,18 +82,24 @@ async function main() {
     }
   }
 
-  // ── Build output rows ───────────────────────────────────────────────────
+  // ── Build output rows + summary stats ──────────────────────────────────
+  let ukInStockCount  = 0;
+  let euMktsTotalPct  = 0;
+  const totalAsins    = asinMap.size;
+
   const outputRows: (string | number)[][] = Array.from(asinMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([asin, { sku, stock }]) => {
       const ukStock   = stock['GB'] ?? 0;
       const ukInStock = ukStock > 0 ? 'Yes' : 'No';
+      if (ukStock > 0) ukInStockCount++;
 
       let euCount = 0;
       for (const m of EU_MARKETS) {
         if ((stock[m] ?? 0) > 0) euCount++;
       }
       const euPct = Math.round((euCount / EU_MARKETS.length) * 100);
+      euMktsTotalPct += euPct;
 
       return [
         asin,
@@ -113,7 +119,20 @@ async function main() {
       ];
     });
 
-  console.log(`  ${outputRows.length} row(s) to write.`);
+  const ukRate = totalAsins > 0 ? Math.round((ukInStockCount / totalAsins) * 100) : 0;
+  const euRate = totalAsins > 0 ? Math.round(euMktsTotalPct  / totalAsins)        : 0;
+
+  // Summary block written above the per-ASIN table (rows 1–4, then blank, then headers)
+  const summaryRows: (string | number)[][] = [
+    ['',                  'UK',       'EU (avg across all markets)'],
+    ['In-Stock Rate',     ukRate,     euRate],
+    ['ASINs in-stock',    ukInStockCount, ''],
+    ['Total ASINs',       totalAsins, totalAsins],
+    [],
+  ];
+
+  console.log(`  UK in-stock rate: ${ukRate}%  EU in-stock rate: ${euRate}%`);
+  console.log(`  ${outputRows.length} ASIN row(s) to write.`);
 
   // ── Write to ASIN Ins tab ───────────────────────────────────────────────
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
@@ -140,7 +159,7 @@ async function main() {
     spreadsheetId:    SPREADSHEET_ID,
     range:            `${DEST_TAB}!A1`,
     valueInputOption: 'RAW',
-    requestBody:      { values: [HEADERS, ...outputRows] },
+    requestBody:      { values: [...summaryRows, HEADERS, ...outputRows] },
   });
 
   console.log(`  Done — ${outputRows.length} ASIN(s) written to "${DEST_TAB}".`);
