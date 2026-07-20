@@ -122,16 +122,21 @@ class LinnworksClient:
         self.session.headers.update({"Authorization": self.access_token})
         print(f"Authenticated. Server: {self.server}")
 
-    def _get(self, path, params=None, retries=3):
+    def _request(self, method, path, params=None, body=None, retries=3):
         url = f"{self.server}{path}"
         for attempt in range(retries):
             try:
-                resp = self.session.get(url, params=params, timeout=60)
+                if method == "GET":
+                    resp = self.session.get(url, params=params, timeout=60)
+                else:
+                    resp = self.session.post(url, json=body or {}, timeout=60)
                 if resp.status_code == 429:
                     wait = int(resp.headers.get("Retry-After", 5))
                     print(f"  Rate limited — waiting {wait}s")
                     time.sleep(wait)
                     continue
+                if not resp.ok:
+                    print(f"  HTTP {resp.status_code} {path}: {resp.text[:500]}", flush=True)
                 resp.raise_for_status()
                 return resp.json()
             except requests.RequestException:
@@ -139,22 +144,11 @@ class LinnworksClient:
                     raise
                 time.sleep(2 ** attempt)
 
+    def _get(self, path, params=None, retries=3):
+        return self._request("GET", path, params=params, retries=retries)
+
     def _post(self, path, body=None, retries=3):
-        url = f"{self.server}{path}"
-        for attempt in range(retries):
-            try:
-                resp = self.session.post(url, json=body or {}, timeout=60)
-                if resp.status_code == 429:
-                    wait = int(resp.headers.get("Retry-After", 5))
-                    print(f"  Rate limited — waiting {wait}s")
-                    time.sleep(wait)
-                    continue
-                resp.raise_for_status()
-                return resp.json()
-            except requests.RequestException:
-                if attempt == retries - 1:
-                    raise
-                time.sleep(2 ** attempt)
+        return self._request("POST", path, body=body, retries=retries)
 
     def get_all_stock_items(self):
         items, page = [], 1
@@ -295,7 +289,8 @@ def main():
         try:
             history = client.get_stock_history(item_id)
         except Exception as e:
-            print(f"  WARN: Could not fetch history for {sku}: {e}")
+            if (i + 1) <= 5:
+                print(f"  WARN [{i+1}]: {sku or item_id}: {e}", flush=True)
             history = []
 
         oos_periods = calculate_oos_periods(history, ANALYSIS_START, TODAY)
