@@ -291,7 +291,8 @@ def write_to_sheets(summary_rows, detail_rows, instock_pct):
 
     summary_headers = ["SKU", "Title", "Total OOS Days"] + [str(y) for y in YEARS]
     detail_headers  = ["SKU", "Title", "OOS From", "OOS To", "Days OOS"]
-    instock_row     = ["In-stock %", "", ""] + [f"{instock_pct.get(y, 0):.1f}%" for y in YEARS]
+    # Write percentages as plain numbers (0–100) so Sheets stores them as real values
+    instock_row = ["In-stock %", "", ""] + [round(instock_pct.get(y, 0), 1) for y in YEARS]
 
     all_rows = (
         [
@@ -306,6 +307,17 @@ def write_to_sheets(summary_rows, detail_rows, instock_pct):
         + [[str(v) if not isinstance(v, (int, float)) else v for v in r] for r in detail_rows]
     )
 
+    # Get the Output tab's sheet ID for formatting
+    meta = sheets.get(
+        spreadsheetId=SPREADSHEET_ID,
+        fields="sheets.properties",
+    ).execute()
+    sheet_id = next(
+        s["properties"]["sheetId"]
+        for s in meta["sheets"]
+        if s["properties"]["title"] == TAB_NAME
+    )
+
     sheets.values().clear(
         spreadsheetId=SPREADSHEET_ID,
         range=TAB_NAME,
@@ -316,6 +328,30 @@ def write_to_sheets(summary_rows, detail_rows, instock_pct):
         range=f"{TAB_NAME}!A1",
         valueInputOption="RAW",
         body={"values": all_rows},
+    ).execute()
+
+    # Bold rows 2 (in-stock %) and 3 (column headers)
+    sheets.batchUpdate(
+        spreadsheetId=SPREADSHEET_ID,
+        body={
+            "requests": [
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId":       sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex":   3,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "textFormat": {"bold": True},
+                            }
+                        },
+                        "fields": "userEnteredFormat.textFormat.bold",
+                    }
+                }
+            ]
+        },
     ).execute()
 
     total_rows = len(all_rows)
