@@ -7,7 +7,6 @@
 
 import 'dotenv/config';
 import { google } from 'googleapis';
-import { loadEnvForAmazon } from '../lib/env.js';
 import { SpApiClient } from '../lib/sp-api/client.js';
 import { runReport, parseTsv } from '../lib/sp-api/reports.js';
 
@@ -26,13 +25,15 @@ async function main() {
   console.log('Amazon DE Price → Google Sheets');
   console.log('--------------------------------');
 
-  const env = loadEnvForAmazon();
-  const spClient = new SpApiClient({
-    region:        env.SP_API_REGION,
-    clientId:      env.SP_API_LWA_CLIENT_ID,
-    clientSecret:  env.SP_API_LWA_CLIENT_SECRET,
-    refreshToken:  env.SP_API_REFRESH_TOKEN,
-  });
+  const clientId     = process.env.SP_API_LWA_CLIENT_ID;
+  const clientSecret = process.env.SP_API_LWA_CLIENT_SECRET;
+  const refreshToken = process.env.SP_API_REFRESH_TOKEN;
+  const region       = (process.env.SP_API_REGION ?? 'eu') as 'na' | 'eu' | 'fe';
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('SP_API_LWA_CLIENT_ID, SP_API_LWA_CLIENT_SECRET, and SP_API_REFRESH_TOKEN must all be set');
+  }
+
+  const spClient = new SpApiClient({ region, clientId, clientSecret, refreshToken });
 
   console.log('Requesting FBA Inventory Planning report for DE...');
   const report = await runReport(spClient, {
