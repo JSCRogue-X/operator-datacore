@@ -14,7 +14,7 @@ const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
 
 const HEADERS = [
   'Amazon FBA SKU', 'Barcode', 'SKU', 'ASIN', 'Title',
-  'Supplier', 'IH Cost', 'FBA EU Cost', 'IH Buffer',
+  'Supplier', 'IH Cost', 'FBA UK Cost', 'FBA EU Cost', 'IH Buffer',
 ];
 
 const EXCLUDED_CATEGORIES = new Set(['Stationary', 'Discontinued SPINCARE', 'Default']);
@@ -63,6 +63,7 @@ interface RawItem {
   ItemTitle:               string;
   CategoryName?:           string;
   BarcodeNumber?:          string;
+  PurchasePrice?:          number;
   StockLevels?:            StockLevel[];
   ItemExtendedProperties?: ExtProp[];
 }
@@ -156,7 +157,8 @@ async function main() {
         ext('ASIN'),                       // ASIN
         item.ItemTitle,                    // Title
         ext('SC-SupplierCode'),            // Supplier
-        numExt('FBA_UK_Inbound_Cost'),     // IH Cost
+        num(item.PurchasePrice),           // IH Cost (purchase price)
+        numExt('FBA_UK_Inbound_Cost'),     // FBA UK Cost
         numExt('FBA_EU_Inbound_Cost'),     // FBA EU Cost
         num(loc.MinimumLevel),             // IH Buffer
       ];
