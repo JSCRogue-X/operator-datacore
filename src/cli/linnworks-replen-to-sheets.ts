@@ -164,6 +164,7 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
   const ext    = (name: string): string => extMap.get(name) ?? '';
   const num    = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
   const numExt = (name: string): number | '' => { const v = extMap.get(name); if (!v) return ''; const n = Number(v); return isNaN(n) ? '' : n; };
+  const numStr = (v: string | undefined): number | string => { if (!v) return ''; const n = Number(v); return isNaN(n) ? v : n; };
 
   // Supplier data — field is 'Supplier' (confirmed from API)
   const supplier = item.Suppliers?.[0] as Record<string, unknown> | undefined;
@@ -178,7 +179,7 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
   return [
     item.ItemNumber,                    // SKU
     item.ItemTitle,                     // Item Title
-    item.BarcodeNumber      ?? '',      // Barcode Number
+    numStr(item.BarcodeNumber),          // Barcode Number
     item.CategoryName       ?? '',      // Category
     loc.Available,                      // Stock available level at location
     num(item.PurchasePrice),            // Purchase Price

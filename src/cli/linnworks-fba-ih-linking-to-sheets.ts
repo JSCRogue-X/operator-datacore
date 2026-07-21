@@ -147,10 +147,11 @@ async function main() {
       const ext    = (name: string): string => extMap.get(name) ?? '';
       const numExt = (name: string): number | '' => { const v = extMap.get(name); if (!v) return ''; const n = Number(v); return isNaN(n) ? '' : n; };
       const num    = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
+      const numStr = (v: string | undefined): number | string => { if (!v) return ''; const n = Number(v); return isNaN(n) ? v : n; };
 
       return [
         ext('FBA SKU'),                    // Amazon FBA SKU
-        item.BarcodeNumber ?? '',          // Barcode
+        numStr(item.BarcodeNumber),        // Barcode
         item.ItemNumber,                   // SKU
         ext('ASIN'),                       // ASIN
         item.ItemTitle,                    // Title
