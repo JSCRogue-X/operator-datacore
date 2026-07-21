@@ -49,6 +49,11 @@ KEY_FILE = os.environ.get(
 SPREADSHEET_ID = "1sF1lxqJMKJQpnsK3q6e7zzcDSucBDUsl0CHfwkocqcQ"
 TAB_NAME       = "Output"
 
+# SKUs to exclude until a given date (add more as needed)
+EXCLUDE_UNTIL = {
+    "RCM-DRYING-RACK": date(2027, 1, 1),
+}
+
 if not all([APP_ID, APP_SECRET, TOKEN]):
     sys.exit(
         "ERROR: Missing Linnworks credentials.\n"
@@ -352,6 +357,9 @@ def main():
         title   = item.get("ItemTitle") or item.get("Title") or ""
         item_id = item.get("StockItemId") or item.get("Id") or ""
         if not item_id:
+            continue
+
+        if TODAY < EXCLUDE_UNTIL.get(sku, date.min):
             continue
 
         if (i + 1) % 25 == 0 or i == 0:
