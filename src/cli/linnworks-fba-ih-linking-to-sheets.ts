@@ -89,7 +89,7 @@ async function fetchItems(session: LinnworksSession): Promise<{ item: RawItem; l
         loadVariationParents: false,
         entriesPerPage:       pageSize,
         pageNumber,
-        dataRequirements:     ['StockLevels', 'ExtendedProperties'],
+        dataRequirements:     ['StockLevels', 'ExtendedProperties', 'Supplier'],
         searchTypes:          ['SKU', 'Title', 'Barcode'],
       }),
     });
@@ -158,8 +158,8 @@ async function main() {
         item.ItemTitle,                    // Title
         ext('SC-SupplierCode'),            // Supplier
         num(item.PurchasePrice),           // IH Cost (purchase price)
-        numExt('FBA_UK_Inbound_Cost'),     // FBA UK Cost
-        numExt('FBA_EU_Inbound_Cost'),     // FBA EU Cost
+        numExt('FBA_UK_Landed_Cost'),      // FBA UK Cost
+        numExt('FBA_EU_Landed_Cost'),      // FBA EU Cost
         num(loc.MinimumLevel),             // IH Buffer
       ];
     });
