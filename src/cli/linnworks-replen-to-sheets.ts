@@ -161,8 +161,9 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     const value = p.PropertyValue ?? '';
     if (name) extMap.set(name, value);
   }
-  const ext = (name: string) => extMap.get(name) ?? '';
-  const num = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
+  const ext    = (name: string): string => extMap.get(name) ?? '';
+  const num    = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
+  const numExt = (name: string): number | '' => { const v = extMap.get(name); if (!v) return ''; const n = Number(v); return isNaN(n) ? '' : n; };
 
   // Supplier data — field is 'Supplier' (confirmed from API)
   const supplier = item.Suppliers?.[0] as Record<string, unknown> | undefined;
@@ -183,37 +184,37 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     num(item.PurchasePrice),            // Purchase Price
     num(item.Weight),                   // Weight
     loc.Location?.LocationName ?? '',   // Stock Location
-    ext('CaseSize'),                    // CaseSize
-    ext('SC-CartonWeight'),             // SC-CartonWeight
-    ext('SC-PalletQuantity-UK'),        // SC-PalletQuantity-UK
+    numExt('CaseSize'),                 // CaseSize
+    numExt('SC-CartonWeight'),          // SC-CartonWeight
+    numExt('SC-PalletQuantity-UK'),     // SC-PalletQuantity-UK
     num(loc.Due),                       // Stock due at location
     '',                                 // Is Archived — not exposed in API
     ext('CommodityCode'),               // Commodity Code
     ext('CountryOfOrigin'),             // Country Of Origin
     ext('CN22Description'),             // CN22 Description
     ext('SC-CartonSize'),                // Carton Dimensions
-    ext('SC-CartonCBM'),                // SC-CartonCBM
+    numExt('SC-CartonCBM'),             // SC-CartonCBM
     ext('ASIN'),                        // ASIN
     ext('FBA SKU'),                     // FBA SKU
     ext('SC-Title'),                    // SC-Title — name TBC from diagnostic
     num(item.Height),                   // Height
     num(item.Width),                    // Dim Width
     num(item.Depth),                    // Depth
-    ext('SC-PalletQuantity-DE'),        // SC-PalletQuantity-DE
+    numExt('SC-PalletQuantity-DE'),     // SC-PalletQuantity-DE
     ebayPrice,                          // EBAY PRICE — from channel pricing (Source=EBAY)
     item.PackageGroupName   ?? '',      // Default Packaging Group
     ext('PostageType'),                 // Postage Type
     ext('SC-SupplierCode'),             // SC-SupplierCode
-    ext('SC-UnitPriceUSD'),             // SC-UnitPriceUSD
-    ext('SC-Supplier-PQ'),               // SC-Supplier-PQ
+    numExt('SC-UnitPriceUSD'),          // SC-UnitPriceUSD
+    numExt('SC-Supplier-PQ'),           // SC-Supplier-PQ
     ext('SC-SupplierTitle'),            // SC-SupplierTitle
     supplierName,                       // Supplier Name
-    ext('EU_Inbound_DD_Duty_Cost'),     // EU_Inbound_DD_Duty_Cost
-    ext('FBA_3_Month_Storage_Cost'),    // FBA_3_Month_Storage_Cost — name TBC
-    ext('FBA_UK_Inbound_Cost'),         // FBA_UK_Inbound_Cost — name TBC
-    ext('FBA_EU_Inbound_Cost'),         // FBA_EU_Inbound_Cost — name TBC
-    ext('FBA_UK_Landed_Cost'),          // FBA_UK_Landed_Cost — name TBC
-    ext('FBA_EU_Landed_Cost'),          // FBA_EU_Landed_Cost — name TBC
+    numExt('EU_Inbound_DD_Duty_Cost'),  // EU_Inbound_DD_Duty_Cost
+    numExt('FBA_3_Month_Storage_Cost'), // FBA_3_Month_Storage_Cost
+    numExt('FBA_UK_Inbound_Cost'),      // FBA_UK_Inbound_Cost
+    numExt('FBA_EU_Inbound_Cost'),      // FBA_EU_Inbound_Cost
+    numExt('FBA_UK_Landed_Cost'),       // FBA_UK_Landed_Cost
+    numExt('FBA_EU_Landed_Cost'),       // FBA_EU_Landed_Cost
     ext('AGL-Detailed-Description-of-Merchandise-in-English'), // AGL description
     ext('AGL-Material'),                // AGL Material
     num(loc.StockLevel),                // Stock level at location
