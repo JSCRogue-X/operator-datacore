@@ -273,6 +273,19 @@ async function main() {
     requestBody: { values: [HEADERS, ...outputRows] },
   });
 
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+          cell: { userEnteredFormat: { textFormat: { bold: true } } },
+          fields: 'userEnteredFormat.textFormat.bold',
+        },
+      }],
+    },
+  });
+
   console.log(`  Done — ${outputRows.length} row(s) written to "${TAB_NAME}".`);
 }
 
