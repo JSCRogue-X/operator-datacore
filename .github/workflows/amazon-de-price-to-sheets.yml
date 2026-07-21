@@ -1,0 +1,35 @@
+name: Amazon DE Price → Sheets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  amazon-de-price:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SP_API_REGION:           eu
+      SP_API_LWA_CLIENT_ID:    ${{ secrets.SP_API_LWA_CLIENT_ID }}
+      SP_API_LWA_CLIENT_SECRET: ${{ secrets.SP_API_LWA_CLIENT_SECRET }}
+      SP_API_REFRESH_TOKEN:    ${{ secrets.SP_API_REFRESH_TOKEN }}
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Amazon DE Price → Sheets
+        run: npx tsx src/cli/amazon-de-price-to-sheets.ts
