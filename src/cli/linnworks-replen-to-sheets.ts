@@ -190,7 +190,7 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     numExt('SC-PalletQuantity-UK'),     // SC-PalletQuantity-UK
     num(loc.Due),                       // Stock due at location
     '',                                 // Is Archived — not exposed in API
-    ext('CommodityCode'),               // Commodity Code
+    numExt('CommodityCode'),             // Commodity Code
     ext('CountryOfOrigin'),             // Country Of Origin
     ext('CN22Description'),             // CN22 Description
     ext('SC-CartonSize'),                // Carton Dimensions

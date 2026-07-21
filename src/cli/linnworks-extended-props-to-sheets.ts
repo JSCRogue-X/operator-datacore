@@ -145,43 +145,45 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     const value = p.PropertyValue ?? '';
     if (name) extMap.set(name, value);
   }
-  const ext = (name: string) => extMap.get(name) ?? '';
-  const num = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
+  const ext    = (name: string): string => extMap.get(name) ?? '';
+  const num    = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
+  const numExt = (name: string): number | '' => { const v = extMap.get(name); if (!v) return ''; const n = Number(v); return isNaN(n) ? '' : n; };
+  const numStr = (v: string | undefined): number | string => { if (!v) return ''; const n = Number(v); return isNaN(n) ? v : n; };
 
   return [
     item.ItemNumber,                    // SKU
     item.ItemTitle,                     // Item Title
     item.CategoryName    ?? '',         // Category
-    item.BarcodeNumber   ?? '',         // Barcode Number
-    ext('CommodityCode'),               // Commodity Codes
-    ext('CN22Description'),             // CN22
-    ext('HSTariffCode'),                // HSTariffCode
-    ext('SC-CartonSize'),               // SC-CartonSize
-    ext('SC-SupplierCode'),             // SC-SupplierCode
-    ext('SC-CartonWeight'),             // SC-CartonWeight
-    ext('CountryOfOrigin'),             // CountryOfOrigin
-    ext('SC-PalletQuantity-UK'),         // SC-PalletQuantity
-    ext('SC-StorageType'),              // SC-StorageType
-    ext('CaseSize'),                    // CaseSize
-    ext('SC-PalletCartons'),            // SC-PalletCartons
-    '',                                 // Is Archived — field TBC after first run
-    num(item.Weight),                   // Weight
-    num(item.Height),                   // Height
-    num(item.Width),                    // Dim Width
-    num(item.Depth),                    // Depth
-    ext('ASIN'),                        // ASIN
-    ext('SC-CartonCBM'),                // CBM
-    ext('SC-SupplierCode'),             // SC-SupplierCode (duplicate per spec)
+    numStr(item.BarcodeNumber),          // Barcode Number
+    numExt('CommodityCode'),             // Commodity Codes
+    ext('CN22Description'),              // CN22
+    numExt('HSTariffCode'),              // HSTariffCode
+    ext('SC-CartonSize'),                // SC-CartonSize
+    ext('SC-SupplierCode'),              // SC-SupplierCode
+    numExt('SC-CartonWeight'),           // SC-CartonWeight
+    ext('CountryOfOrigin'),              // CountryOfOrigin
+    numExt('SC-PalletQuantity-UK'),      // SC-PalletQuantity
+    ext('SC-StorageType'),               // SC-StorageType
+    numExt('CaseSize'),                  // CaseSize
+    numExt('SC-PalletCartons'),          // SC-PalletCartons
+    '',                                  // Is Archived — field TBC after first run
+    num(item.Weight),                    // Weight
+    num(item.Height),                    // Height
+    num(item.Width),                     // Dim Width
+    num(item.Depth),                     // Depth
+    ext('ASIN'),                         // ASIN
+    numExt('SC-CartonCBM'),              // CBM
+    ext('SC-SupplierCode'),              // SC-SupplierCode (duplicate per spec)
     num(loc.Due),                        // Stock due at location
-    num(loc.StockLevel),                // Stock level at location
-    ext('Max Level'),                    // Max Level — extended property
-    num(loc.MinimumLevel),              // Stock minimum level at location
-    loc.Location?.LocationName ?? '',   // Stock Location
-    ext('Short Title'),                 // Short Title
-    ext('UnitQuantity'),                // UnitQuantity
-    loc.Available,                      // Stock available level at location
-    ext('FBA SKU'),                     // FBA SKU
-    ext('SC-PalletQuantity-DE'),        // SC-PalletQuantity-DE
+    num(loc.StockLevel),                 // Stock level at location
+    numExt('Max Level'),                 // Max Level — extended property
+    num(loc.MinimumLevel),               // Stock minimum level at location
+    loc.Location?.LocationName ?? '',    // Stock Location
+    ext('Short Title'),                  // Short Title
+    numExt('UnitQuantity'),              // UnitQuantity
+    loc.Available,                       // Stock available level at location
+    ext('FBA SKU'),                      // FBA SKU
+    numExt('SC-PalletQuantity-DE'),      // SC-PalletQuantity-DE
   ];
 }
 
