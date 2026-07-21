@@ -100,6 +100,14 @@ def days_overlap(start, end, year):
     hi = min(end,   y_end)
     return max(0, (hi - lo).days)
 
+def effective_days_in_year(year, analysis_start, today):
+    """Days within the analysis window that fall in the given year."""
+    y_start = date(year, 1, 1)
+    y_end   = date(year, 12, 31)
+    lo = max(analysis_start, y_start)
+    hi = min(today, y_end)
+    return max(0, (hi - lo).days)
+
 # ── Linnworks client ──────────────────────────────────────────────────────────
 
 class LinnworksClient:
@@ -207,9 +215,34 @@ class LinnworksClient:
 
 # ── OOS calculation ───────────────────────────────────────────────────────────
 
-def calculate_oos_periods(history, analysis_start, today):
+def find_first_sale_date(history):
+    """Return the earliest date with a negative ChangeQty (first sale/dispatch)."""
+    dates = []
+    for e in history:
+        try:
+            change_qty = int(e.get("ChangeQty") or 0)
+        except (ValueError, TypeError):
+            continue
+        if change_qty < 0:
+            d = parse_date(e.get("Date"))
+            if d is not None:
+                dates.append(d)
+    return min(dates) if dates else None
+
+
+def calculate_oos_periods(history, analysis_start, today, first_sale_date=None):
+    # Never sold — return empty (0 OOS days)
+    if first_sale_date is None:
+        return []
+
+    # Only count OOS from when the item first sold
+    effective_start = max(analysis_start, first_sale_date)
+    if effective_start > today:
+        return []
+
     if not history:
         return []
+
     parsed = []
     for e in history:
         d = parse_date(e.get("Date"))
@@ -219,14 +252,14 @@ def calculate_oos_periods(history, analysis_start, today):
         return []
     parsed.sort(key=lambda x: x[0])
 
-    pre = [level for (d, level) in parsed if d < analysis_start]
+    pre = [level for (d, level) in parsed if d < effective_start]
     current_level = pre[-1] if pre else 1
 
-    oos_start   = analysis_start if current_level == 0 else None
+    oos_start   = effective_start if current_level == 0 else None
     oos_periods = []
 
     for entry_date, level in parsed:
-        if entry_date < analysis_start:
+        if entry_date < effective_start:
             continue
         if entry_date > today:
             break
@@ -243,7 +276,7 @@ def calculate_oos_periods(history, analysis_start, today):
 
 # ── Google Sheets write ───────────────────────────────────────────────────────
 
-def write_to_sheets(summary_rows, detail_rows):
+def write_to_sheets(summary_rows, detail_rows, instock_pct):
     creds = service_account.Credentials.from_service_account_file(
         KEY_FILE,
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
@@ -251,23 +284,23 @@ def write_to_sheets(summary_rows, detail_rows):
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     sheets  = service.spreadsheets()
 
-    # Build the full block to write: Summary section, blank row, Detail section
     summary_headers = ["SKU", "Title", "Total OOS Days"] + [str(y) for y in YEARS]
     detail_headers  = ["SKU", "Title", "OOS From", "OOS To", "Days OOS"]
+    instock_row     = ["In-stock %", "", ""] + [f"{instock_pct.get(y, 0):.1f}%" for y in YEARS]
 
     all_rows = (
         [
             [f"OOS Summary — run {TODAY.isoformat()}  |  window: {ANALYSIS_START} → {TODAY}"],
+            instock_row,
             summary_headers,
         ]
         + [[str(v) if not isinstance(v, (int, float)) else v for v in r] for r in summary_rows]
-        + [[]]  # blank separator
+        + [[]]
         + [["OOS Detail"]]
         + [detail_headers]
         + [[str(v) if not isinstance(v, (int, float)) else v for v in r] for r in detail_rows]
     )
 
-    # Clear existing content then write
     sheets.values().clear(
         spreadsheetId=SPREADSHEET_ID,
         range=TAB_NAME,
@@ -305,8 +338,11 @@ def main():
     # ──────────────────────────────────────────────────────────────────────────
 
     print("\nFetching all stock items...")
-    items = client.get_all_stock_items()
-    print(f"Total: {len(items)} items\n")
+    all_items = client.get_all_stock_items()
+
+    # Filter to SPINCARE category only
+    items = [i for i in all_items if (i.get("CategoryName") or "") == "SPINCARE"]
+    print(f"Total: {len(all_items)} items fetched, {len(items)} in SPINCARE category\n")
 
     summary_rows = []
     detail_rows  = []
@@ -328,9 +364,10 @@ def main():
                 print(f"  WARN [{i+1}]: {sku or item_id}: {e}", flush=True)
             history = []
 
-        oos_periods = calculate_oos_periods(history, ANALYSIS_START, TODAY)
-        total_days  = sum((end - start).days for start, end in oos_periods)
-        year_days   = {y: sum(days_overlap(s, e, y) for s, e in oos_periods) for y in YEARS}
+        first_sale_date = find_first_sale_date(history)
+        oos_periods     = calculate_oos_periods(history, ANALYSIS_START, TODAY, first_sale_date)
+        total_days      = sum((end - start).days for start, end in oos_periods)
+        year_days       = {y: sum(days_overlap(s, e, y) for s, e in oos_periods) for y in YEARS}
 
         summary_rows.append([sku, title, total_days] + [year_days[y] for y in YEARS])
         for s, e in oos_periods:
@@ -338,9 +375,24 @@ def main():
 
         time.sleep(0.2)
 
+    # ── Calculate in-stock % per year ─────────────────────────────────────────
+    n = len(summary_rows)
+    instock_pct = {}
+    for idx, y in enumerate(YEARS):
+        avail = effective_days_in_year(y, ANALYSIS_START, TODAY)
+        if avail > 0 and n > 0:
+            total_oos = sum(row[3 + idx] for row in summary_rows)
+            instock_pct[y] = max(0.0, min(100.0, (1 - total_oos / (avail * n)) * 100))
+        else:
+            instock_pct[y] = 100.0
+    # ──────────────────────────────────────────────────────────────────────────
+
     print(f"\n{len(summary_rows)} SKUs analysed, {len(detail_rows)} OOS periods found.")
+    for idx, y in enumerate(YEARS):
+        avail = effective_days_in_year(y, ANALYSIS_START, TODAY)
+        print(f"  {y}: {avail} days in window, in-stock {instock_pct[y]:.1f}%")
     print("Writing to Google Sheets...")
-    write_to_sheets(summary_rows, detail_rows)
+    write_to_sheets(summary_rows, detail_rows, instock_pct)
     print("Done!")
 
 if __name__ == "__main__":

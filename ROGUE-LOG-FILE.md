@@ -26,6 +26,7 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 **Decisions**
 - History pulled from Ogden Fulfilment location only (not FBA locations)
 - No scheduling set up — run on demand
+- Jon confirmed working as expected: 86 SKUs, 128 OOS periods, SKU + Title + per-year breakdown all correct in Output tab
 
 **Files created/changed**
 - `linnworks_oos.py` — new Python OOS analysis script
