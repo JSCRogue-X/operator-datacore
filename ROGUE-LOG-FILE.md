@@ -6,6 +6,42 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 21 July 2026
+
+**Numeric columns fixed — Extended Props and Replen scripts**
+- Extended Props: 11 columns now written as real numbers (BarcodeNumber via `numStr`, HSTariffCode, CommodityCode, SC-CartonWeight, SC-PalletQuantity, CaseSize, SC-PalletCartons, CBM, Max Level, UnitQuantity, SC-PalletQuantity-DE via `numExt`)
+- Replen: CommodityCode fixed (was `ext()`, now `numExt()`)
+- Standing rule established: all numeric columns written as numbers, dates as proper date values — never plain strings
+
+**New script: linnworks-fba-ih-linking-to-sheets.ts**
+- Writes FBA IH Linking data to `LinkFile New` tab in FBA IH Linking File spreadsheet
+- Columns: Amazon FBA SKU, Barcode, SKU, ASIN, Title, Supplier, IH Cost, FBA UK Cost, FBA EU Cost, IH Buffer
+- Several iterative fixes during testing:
+  - IH Cost: `FBA_UK_Inbound_Cost` → `item.PurchasePrice` → `item.Suppliers[0].PurchasePrice` (base response always returns 0; actual value is in the supplier record)
+  - FBA UK Cost: added as new column; source changed `Inbound` → `Landed`
+  - FBA EU Cost: source changed `Inbound` → `Landed`
+  - Supplier: `ext('SC-SupplierCode')` → `ext('Supplier')` → `item.Suppliers[0]['Supplier']` (supplier name from Suppliers record, not extended properties)
+  - `dataRequirements` updated to include `'Supplier'` so supplier record is populated
+
+**New script: amazon-de-price-to-sheets.ts**
+- Pulls `GET_FBA_INVENTORY_PLANNING_DATA` for DE marketplace (`A1PA6795UKMFR9`)
+- Writes SKU, FNSKU, ASIN, Product Name, Condition, Price, Marketplace Country Code to `[DO NOT DELETE] Amazon DE Price` tab in FBA IH Linking File
+- Fix: removed `loadEnvForAmazon()` — it triggered Supabase schema validation which fails when only SP-API secrets are present; reads credentials directly from `process.env` instead
+
+**Decisions**
+- Purchase price in Linnworks is stored on the supplier record (`Suppliers[0].PurchasePrice`), not on the stock item's base `PurchasePrice` field (which always returns 0 from `GetStockItemsFull`)
+- Both new Linnworks scripts are standalone `workflow_dispatch`-only workflows
+
+**Files created/changed**
+- `src/cli/linnworks-fba-ih-linking-to-sheets.ts` — new script (multiple fixes)
+- `src/cli/amazon-de-price-to-sheets.ts` — new script
+- `src/cli/linnworks-extended-props-to-sheets.ts` — 11 numeric column fixes
+- `src/cli/linnworks-replen-to-sheets.ts` — CommodityCode numeric fix
+- `.github/workflows/linnworks-fba-ih-linking-to-sheets.yml` — new workflow
+- `.github/workflows/amazon-de-price-to-sheets.yml` — new workflow
+
+---
+
 ### 20 July 2026
 
 **Linnworks OOS Days Analysis → Google Sheets — new script, fully working**
