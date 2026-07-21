@@ -63,9 +63,9 @@ interface RawItem {
   ItemTitle:               string;
   CategoryName?:           string;
   BarcodeNumber?:          string;
-  PurchasePrice?:          number;
   StockLevels?:            StockLevel[];
   ItemExtendedProperties?: ExtProp[];
+  Suppliers?:              Array<Record<string, unknown>>;
 }
 
 // ── Fetch ───────────────────────────────────────────────────────────────────
@@ -150,14 +150,18 @@ async function main() {
       const num    = (v: number | undefined): number | '' => (v !== undefined && v !== null) ? v : '';
       const numStr = (v: string | undefined): number | string => { if (!v) return ''; const n = Number(v); return isNaN(n) ? v : n; };
 
+      const supplierRec = item.Suppliers?.[0];
+      const pp = parseFloat(String(supplierRec?.['PurchasePrice'] ?? ''));
+      const purchasePrice: number | '' = isNaN(pp) ? '' : pp;
+
       return [
         ext('FBA SKU'),                    // Amazon FBA SKU
         numStr(item.BarcodeNumber),        // Barcode
         item.ItemNumber,                   // SKU
         ext('ASIN'),                       // ASIN
         item.ItemTitle,                    // Title
-        ext('SC-SupplierCode'),            // Supplier
-        num(item.PurchasePrice),           // IH Cost (purchase price)
+        ext('Supplier'),                   // Supplier
+        purchasePrice,                     // IH Cost (purchase price from supplier record)
         numExt('FBA_UK_Landed_Cost'),      // FBA UK Cost
         numExt('FBA_EU_Landed_Cost'),      // FBA EU Cost
         num(loc.MinimumLevel),             // IH Buffer
