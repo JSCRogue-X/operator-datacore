@@ -160,7 +160,7 @@ async function main() {
         item.ItemNumber,                   // SKU
         ext('ASIN'),                       // ASIN
         item.ItemTitle,                    // Title
-        ext('Supplier'),                   // Supplier
+        String(supplierRec?.['Supplier'] ?? ''),  // Supplier
         purchasePrice,                     // IH Cost (purchase price from supplier record)
         numExt('FBA_UK_Landed_Cost'),      // FBA UK Cost
         numExt('FBA_EU_Landed_Cost'),      // FBA EU Cost
