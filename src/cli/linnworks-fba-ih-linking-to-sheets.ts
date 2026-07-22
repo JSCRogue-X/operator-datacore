@@ -186,22 +186,71 @@ async function main() {
       requestBody: { requests: [{ addSheet: { properties: { title: TAB_NAME } } }] },
     });
     sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
+    // Write header row on a brand-new sheet
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${TAB_NAME}!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [HEADERS] },
+    });
   } else {
     sheetId = existingTab.properties?.sheetId ?? 0;
   }
 
-  await sheets.spreadsheets.batchUpdate({
+  // Read existing SKU column (column C) to build row-position map
+  const existingData = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    requestBody: { requests: [{ updateCells: { range: { sheetId }, fields: 'userEnteredValue' } }] },
+    range: `${TAB_NAME}!C:C`,
   });
+  const existingSkuCol = existingData.data.values ?? [];
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${TAB_NAME}!A1`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [HEADERS, ...outputRows] },
-  });
+  // Row 1 is the header; data rows start at Sheets row 2 (array index 1)
+  const skuToRow = new Map<string, number>();
+  for (let i = 1; i < existingSkuCol.length; i++) {
+    const sku = String(existingSkuCol[i]?.[0] ?? '');
+    if (sku) skuToRow.set(sku, i + 1); // 1-based Sheets row number
+  }
+  console.log(`  ${skuToRow.size} existing SKU(s) found in sheet.`);
 
+  // Classify each row: update in place or append as new
+  const updateData: { range: string; values: (string | number)[][] }[] = [];
+  const appendRows: (string | number)[][] = [];
+
+  for (const row of outputRows) {
+    const sku = String(row[2]); // SKU is column C (index 2)
+    if (skuToRow.has(sku)) {
+      const rowNum = skuToRow.get(sku)!;
+      updateData.push({
+        range: `${TAB_NAME}!A${rowNum}:J${rowNum}`,
+        values: [row],
+      });
+    } else {
+      appendRows.push(row);
+    }
+  }
+
+  // Update existing rows (A:J only — any columns to the right are untouched)
+  if (updateData.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: { valueInputOption: 'RAW', data: updateData },
+    });
+    console.log(`  Updated ${updateData.length} existing row(s).`);
+  }
+
+  // Append new SKUs at the bottom
+  if (appendRows.length > 0) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${TAB_NAME}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: appendRows },
+    });
+    console.log(`  Appended ${appendRows.length} new row(s).`);
+  }
+
+  // Bold header row (idempotent)
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
     requestBody: {
@@ -215,7 +264,7 @@ async function main() {
     },
   });
 
-  console.log(`  Done — ${outputRows.length} row(s) written to "${TAB_NAME}".`);
+  console.log(`  Done — ${updateData.length} updated, ${appendRows.length} new, ${updateData.length + appendRows.length} total row(s) in "${TAB_NAME}".`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
