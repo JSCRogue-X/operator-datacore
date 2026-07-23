@@ -71,10 +71,52 @@ async function main() {
     // ── Step 1: Login ────────────────────────────────────────────────────────
     console.log('Logging in to SoStocked...');
     await page.goto('https://app.sostocked.com/login', { waitUntil: 'networkidle' });
-    await page.fill('input[type="email"], input[name="email"]', email);
-    await page.fill('input[type="password"], input[name="password"]', password);
+
+    // Screenshot so we can see the login page in the artifact
+    await page.screenshot({ path: screenshotPath });
+
+    // Wait for any input to appear (React SPA may render slowly)
+    await page.waitForSelector('input', { timeout: 15000 });
+
+    // Fill email — try multiple selector patterns in order
+    const emailSelectors = [
+      'input[type="email"]',
+      'input[name="email"]',
+      'input[placeholder*="email" i]',
+      'input[placeholder*="username" i]',
+      'input[type="text"]:first-of-type',
+    ];
+    let emailFilled = false;
+    for (const sel of emailSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.fill(email);
+        emailFilled = true;
+        console.log(`  Email filled via: ${sel}`);
+        break;
+      }
+    }
+    if (!emailFilled) throw new Error('Could not locate email input — check screenshot artifact');
+
+    // Fill password
+    const passwordSelectors = [
+      'input[type="password"]',
+      'input[name="password"]',
+      'input[placeholder*="password" i]',
+    ];
+    let passwordFilled = false;
+    for (const sel of passwordSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.fill(password);
+        passwordFilled = true;
+        console.log(`  Password filled via: ${sel}`);
+        break;
+      }
+    }
+    if (!passwordFilled) throw new Error('Could not locate password input — check screenshot artifact');
+
     await page.click('button[type="submit"]');
-    // Wait until we leave the login page
     await page.waitForURL(url => !url.href.includes('/login'), { timeout: 20000 });
     console.log(`  Logged in. URL: ${page.url()}`);
 
