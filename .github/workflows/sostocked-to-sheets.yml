@@ -38,10 +38,12 @@ jobs:
       - name: SoStocked → Sheets
         run: npx tsx src/cli/sostocked-to-sheets.ts
 
-      - name: Upload debug screenshot
+      - name: Upload debug screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sostocked-debug-screenshot
-          path: /tmp/sostocked-debug.png
+          name: sostocked-debug-screenshots
+          path: |
+            /tmp/sostocked-debug.png
+            /tmp/sostocked-panel.png
           retention-days: 3

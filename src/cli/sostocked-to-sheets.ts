@@ -137,30 +137,72 @@ async function main() {
     console.log(`  Inventory loaded. URL: ${page.url()}`);
 
     // ── Step 3: Open the export panel ────────────────────────────────────────
-    // The export button is a .btn-outline-secondary button (top-right) that
-    // contains an "Export to Excel" child element (no visible text on the button itself).
     console.log('Opening export panel...');
-    await page.screenshot({ path: screenshotPath });
+    await page.screenshot({ path: screenshotPath }); // screenshot of inventory page
 
-    // Try in order: by title attribute, by child text, by child aria-label, fallback last btn-outline-secondary
-    const exportBtn =
-      page.locator('button.btn-outline-secondary[title*="Export"]').first().or(
-      page.locator('button.btn-outline-secondary').filter({ hasText: /export/i }).last()).or(
-      page.locator('button.btn-outline-secondary').last());
+    // The export button is a .btn-outline-secondary (top-right, no visible text).
+    // Log all btn-outline-secondary buttons so we can see what's available.
+    const allExportBtns = page.locator('button.btn-outline-secondary');
+    const btnCount = await allExportBtns.count();
+    console.log(`  Found ${btnCount} btn-outline-secondary button(s)`);
+    for (let i = 0; i < btnCount; i++) {
+      const txt  = await allExportBtns.nth(i).innerText().catch(() => '');
+      const ttip = await allExportBtns.nth(i).getAttribute('title').catch(() => '');
+      console.log(`    [${i}] text="${txt.trim()}" title="${ttip}"`);
+    }
 
-    await exportBtn.click();
-    await page.waitForTimeout(1500); // wait for the panel to open
+    // Click the last one (top-right export button based on user description)
+    await allExportBtns.last().click();
+    await page.waitForTimeout(2000);
 
-    // ── Step 4: Click Download in the export panel ────────────────────────────
+    // Screenshot after panel opens so we can see what appeared
+    const panelScreenshot = path.join(os.tmpdir(), 'sostocked-panel.png');
+    await page.screenshot({ path: panelScreenshot, fullPage: true });
+    console.log(`  Panel screenshot saved to: ${panelScreenshot}`);
+
+    // ── Step 4: Download the CSV ──────────────────────────────────────────────
+    // Intercept the network response as a fallback — SoStocked may deliver the
+    // file via a response rather than triggering a browser download event.
     console.log('Clicking Download...');
-    const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 30000 }),
-      page.getByRole('button', { name: /download/i }).click(),
+    const csvPath = path.join(os.tmpdir(), 'sos_1pa_export.csv');
+    let csvSavedViaResponse = false;
+
+    page.on('response', async response => {
+      if (csvSavedViaResponse) return;
+      const cd = response.headers()['content-disposition'] ?? '';
+      const ct = response.headers()['content-type'] ?? '';
+      if (cd.includes('attachment') || ct.includes('csv') || ct.includes('spreadsheet') || ct.includes('excel')) {
+        try {
+          const body = await response.body();
+          fs.writeFileSync(csvPath, body);
+          csvSavedViaResponse = true;
+          console.log(`  CSV captured via network response (${body.length} bytes)`);
+        } catch { /* ignore race */ }
+      }
+    });
+
+    // Try button first, then link
+    const downloadEl = page.getByRole('button', { name: /download/i })
+      .or(page.getByRole('link', { name: /download/i }))
+      .first();
+
+    const [dlEvent] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30000 }).catch(() => null),
+      downloadEl.click(),
     ]);
 
-    const csvPath = path.join(os.tmpdir(), 'sos_1pa_export.csv');
-    await download.saveAs(csvPath);
-    console.log(`  Downloaded to: ${csvPath}`);
+    if (dlEvent) {
+      await dlEvent.saveAs(csvPath);
+      console.log(`  Downloaded via browser event to: ${csvPath}`);
+    } else if (csvSavedViaResponse) {
+      console.log(`  CSV saved via response interception`);
+    } else {
+      // Give the response handler a moment to fire
+      await page.waitForTimeout(5000);
+      if (!csvSavedViaResponse) {
+        throw new Error('Download did not complete — check panel screenshot artifact');
+      }
+    }
 
     // ── Step 5: Parse and filter CSV ─────────────────────────────────────────
     console.log('Parsing and filtering CSV...');
