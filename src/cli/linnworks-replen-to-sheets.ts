@@ -182,7 +182,7 @@ function buildRow(item: RawItem, loc: StockLevel): (string | number)[] {
     numStr(item.BarcodeNumber),          // Barcode Number
     item.CategoryName       ?? '',      // Category
     loc.Available,                      // Stock available level at location
-    num(item.PurchasePrice),            // Purchase Price
+    (() => { const p = parseFloat(String(supplier?.['PurchasePrice'] ?? '')); return isNaN(p) ? '' : p; })(), // Purchase Price
     num(item.Weight),                   // Weight
     loc.Location?.LocationName ?? '',   // Stock Location
     numExt('CaseSize'),                 // CaseSize
