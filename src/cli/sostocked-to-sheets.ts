@@ -87,8 +87,13 @@ function parseCSV(text: string): string[][] {
     if (row.some(c => c.trim())) results.push(row);
   }
 
-  // If any cell contains an embedded newline (was inside quotes), keep only the first line
-  return results.map(r => r.map(v => v.includes('\n') ? v.split('\n')[0].trim() : v));
+  // If any cell contains an embedded newline (was inside quotes), keep only the last non-empty line.
+  // This matches how Excel displays multi-line cells (e.g. EU-B SKU is the last line).
+  return results.map(r => r.map(v => {
+    if (!v.includes('\n')) return v;
+    const lines = v.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines[lines.length - 1] ?? v;
+  }));
 }
 
 async function main() {
