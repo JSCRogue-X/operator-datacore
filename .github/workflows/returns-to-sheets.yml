@@ -21,7 +21,6 @@ jobs:
       SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
       SP_API_REGION: eu
       GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
-      IPI_SHEET_ID: 1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4
 
     steps:
       - uses: actions/checkout@v4
