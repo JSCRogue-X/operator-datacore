@@ -70,11 +70,12 @@ async function getShipments(
       : { QueryType: 'SHIPMENT', ShipmentStatusList: ACTIVE_STATUSES, MarketplaceId: marketplaceId };
 
     const resp = await client.request<{
-      payload: { ShipmentData?: InboundShipmentInfo[]; NextToken?: string };
+      payload?: { ShipmentData?: InboundShipmentInfo[]; NextToken?: string };
     }>({ method: 'GET', path: '/fba/inbound/v0/shipments', query });
 
-    results.push(...(resp.payload.ShipmentData ?? []));
-    nextToken = resp.payload.NextToken;
+    const amzPayload = resp.payload.payload;
+    results.push(...(amzPayload?.ShipmentData ?? []));
+    nextToken = amzPayload?.NextToken;
   } while (nextToken);
 
   return results;
@@ -95,11 +96,12 @@ async function getShipmentItems(
     };
 
     const resp = await client.request<{
-      payload: { ItemData?: ShipmentItem[]; NextToken?: string };
+      payload?: { ItemData?: ShipmentItem[]; NextToken?: string };
     }>({ method: 'GET', path: `/fba/inbound/v0/shipments/${shipmentId}/items`, query });
 
-    results.push(...(resp.payload.ItemData ?? []));
-    nextToken = resp.payload.NextToken;
+    const amzPayload = resp.payload.payload;
+    results.push(...(amzPayload?.ItemData ?? []));
+    nextToken = amzPayload?.NextToken;
   } while (nextToken);
 
   return results;
