@@ -203,14 +203,28 @@ async function main() {
 
     // ── Step 5: Parse and filter CSV ─────────────────────────────────────────
     console.log('Parsing and filtering CSV...');
-    const text     = fs.readFileSync(csvPath, 'utf-8');
-    const rows     = parseCSV(text);
-    const header   = rows[0] ?? [];
+    const text   = fs.readFileSync(csvPath, 'utf-8');
+    const rows   = parseCSV(text);
+    const header = rows[0] ?? [];
+
+    // Find the Marketplace column index from the header (case-insensitive)
+    const marketplaceIdx = header.findIndex(h => h.trim().toLowerCase().includes('marketplace'));
+    console.log(`  Marketplace column: index ${marketplaceIdx} ("${header[marketplaceIdx] ?? 'not found'}")`);
+
     const filtered = [
       header,
-      ...rows.slice(1).filter(r => r.length >= 3 && SPINCARE_ASINS.has((r[2] ?? '').trim())),
+      ...rows.slice(1).filter(r => {
+        if (r.length < 3) return false;
+        if (!SPINCARE_ASINS.has((r[2] ?? '').trim())) return false;
+        // Exclude US marketplace rows
+        if (marketplaceIdx >= 0) {
+          const marketplace = (r[marketplaceIdx] ?? '').trim().toUpperCase();
+          if (marketplace === 'US' || marketplace === 'AMAZON US' || marketplace.startsWith('US ')) return false;
+        }
+        return true;
+      }),
     ];
-    console.log(`  Total rows: ${rows.length}, Spincare rows (inc. header): ${filtered.length}`);
+    console.log(`  Total rows: ${rows.length}, Spincare non-US rows (inc. header): ${filtered.length}`);
 
     if (filtered.length < 10 || filtered.length > 200) {
       throw new Error(
