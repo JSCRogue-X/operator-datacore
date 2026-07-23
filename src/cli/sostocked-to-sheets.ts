@@ -26,6 +26,31 @@ const SPINCARE_ASINS = new Set([
   'B0H69Q1K1N','B01AKAHF52',
 ]);
 
+// Columns whose values should be written as numbers (not strings)
+const NUMERIC_HEADERS = new Set([
+  'Potential Stock Out Days',
+  'FBA Available Stock',
+  'Stock Out Days (past 365)',
+  'Stock Out % (past 365)',
+  'Transfer By',
+  'Transfer Amount',
+  'Days Left (FBA + Inbound)',
+  'Days Left (FBA + Warehouse + Inbound/On Order)',
+  'Total Warehouse Stock',
+  'Total Warehouse + Inbound',
+  'Lost Sales / Marketplace',
+  'Longest Side',
+  'Median Side',
+  'Shortest Side',
+  'Package Weight',
+]);
+
+function toNum(v: string): number | string {
+  if (!v.trim()) return '';
+  const n = parseFloat(v.replace(/,/g, ''));
+  return isFinite(n) ? n : v;
+}
+
 // Handles quoted fields and embedded commas
 function parseCSV(text: string): string[][] {
   const results: string[][] = [];
@@ -211,18 +236,25 @@ async function main() {
     const marketplaceIdx = header.findIndex(h => h.trim().toLowerCase().includes('marketplace'));
     console.log(`  Marketplace column: index ${marketplaceIdx} ("${header[marketplaceIdx] ?? 'not found'}")`);
 
+    // Find indices of columns that should be written as numbers
+    const numericIndices = new Set<number>();
+    header.forEach((h, i) => { if (NUMERIC_HEADERS.has(h.trim())) numericIndices.add(i); });
+    console.log(`  Numeric columns found: ${numericIndices.size}`);
+
     const filtered = [
       header,
-      ...rows.slice(1).filter(r => {
-        if (r.length < 3) return false;
-        if (!SPINCARE_ASINS.has((r[2] ?? '').trim())) return false;
-        // Exclude US marketplace rows
-        if (marketplaceIdx >= 0) {
-          const marketplace = (r[marketplaceIdx] ?? '').trim().toUpperCase();
-          if (marketplace === 'US' || marketplace === 'AMAZON US' || marketplace.startsWith('US ')) return false;
-        }
-        return true;
-      }),
+      ...rows.slice(1)
+        .filter(r => {
+          if (r.length < 3) return false;
+          if (!SPINCARE_ASINS.has((r[2] ?? '').trim())) return false;
+          // Exclude US marketplace rows
+          if (marketplaceIdx >= 0) {
+            const marketplace = (r[marketplaceIdx] ?? '').trim().toUpperCase();
+            if (marketplace === 'US' || marketplace === 'AMAZON US' || marketplace.startsWith('US ')) return false;
+          }
+          return true;
+        })
+        .map(r => r.map((v, i) => numericIndices.has(i) ? toNum(v) : v)),
     ];
     console.log(`  Total rows: ${rows.length}, Spincare non-US rows (inc. header): ${filtered.length}`);
 
