@@ -38,6 +38,12 @@ jobs:
       - name: SoStocked → Sheets
         run: npx tsx src/cli/sostocked-to-sheets.ts
 
+      - name: Wait for PIVOT formulas to recalculate
+        run: sleep 5
+
+      - name: PIVOT → Tracking
+        run: npx tsx src/cli/oos-pivot-to-tracking.ts
+
       - name: Upload debug screenshots
         if: always()
         uses: actions/upload-artifact@v4
