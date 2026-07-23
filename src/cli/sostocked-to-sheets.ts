@@ -57,30 +57,38 @@ function toNum(v: string, zeroFill = false): number | string {
   return isFinite(n) ? n : (zeroFill ? 0 : v);
 }
 
-// Handles quoted fields and embedded commas
+// Proper CSV parser: character-by-character so quoted newlines don't split rows.
+// After parsing, embedded newlines within a cell are collapsed to the first line only.
 function parseCSV(text: string): string[][] {
   const results: string[][] = [];
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const row: string[] = [];
-    let col = '';
-    let inQuote = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { col += '"'; i++; }
-        else inQuote = !inQuote;
-      } else if (ch === ',' && !inQuote) {
-        row.push(col); col = '';
-      } else {
-        col += ch;
-      }
+  const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let row: string[] = [];
+  let col = '';
+  let inQuote = false;
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"') {
+      if (inQuote && src[i + 1] === '"') { col += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (ch === ',' && !inQuote) {
+      row.push(col); col = '';
+    } else if (ch === '\n' && !inQuote) {
+      row.push(col); col = '';
+      if (row.some(c => c.trim())) results.push(row);
+      row = [];
+    } else {
+      col += ch;
     }
-    row.push(col);
-    results.push(row);
   }
-  return results;
+  // Flush final row
+  if (col || row.length > 0) {
+    row.push(col);
+    if (row.some(c => c.trim())) results.push(row);
+  }
+
+  // If any cell contains an embedded newline (was inside quotes), keep only the first line
+  return results.map(r => r.map(v => v.includes('\n') ? v.split('\n')[0].trim() : v));
 }
 
 async function main() {
