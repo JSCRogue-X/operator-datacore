@@ -6,6 +6,29 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 23 July 2026
+
+**New script: amazon-shipments-to-sheets.ts**
+- Pulls active FBA inbound shipments for UK and DE marketplaces from SP-API Fulfillment Inbound v0
+- Writes to "Shipments" tab in Automations spreadsheet (`1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4`)
+- Columns: Shipment name, Shipment ID, Status, Created at, Last updated, Ship to, SKUs, Units
+- Fetches items per shipment (GetShipmentItemsByShipmentId) to compute SKU count and Units (received/total format e.g. "0/5880")
+- Deduplicates by ShipmentId across UK and DE (Pan-EU shipments appear in both)
+- Filters: AGL shipments excluded by name check; CLOSED/CANCELLED/DELETED excluded by not querying those statuses
+- Status formatted as human-readable: IN_TRANSIT → "In transit", READY_TO_SHIP → "Ready to ship", etc.
+- Sorted alphabetically by shipment name
+- Clear-and-overwrite pattern (statuses change frequently, no need to preserve old data)
+- Credentials read directly from `process.env` (same pattern as amazon-de-price — avoids Supabase env validation)
+
+**Known limitation**
+- "Created at" and "Last updated" columns are blank — FBA Inbound v0 API does not return timestamps; would need the v2024-03-20 Fulfillment Inbound API to populate these
+
+**Files created**
+- `src/cli/amazon-shipments-to-sheets.ts` — new script
+- `.github/workflows/amazon-shipments-to-sheets.yml` — standalone workflow_dispatch
+
+---
+
 ### 21 July 2026
 
 **Numeric columns fixed — Extended Props and Replen scripts**
