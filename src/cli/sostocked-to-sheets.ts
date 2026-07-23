@@ -75,7 +75,7 @@ async function main() {
     await page.fill('input[type="password"], input[name="password"]', password);
     await page.click('button[type="submit"]');
     // Wait until we leave the login page
-    await page.waitForURL(url => !url.includes('/login'), { timeout: 20000 });
+    await page.waitForURL(url => !url.href.includes('/login'), { timeout: 20000 });
     console.log(`  Logged in. URL: ${page.url()}`);
 
     // ── Step 2: Navigate to inventory ────────────────────────────────────────
@@ -123,7 +123,7 @@ async function main() {
     const header   = rows[0] ?? [];
     const filtered = [
       header,
-      ...rows.slice(1).filter(r => r.length >= 3 && SPINCARE_ASINS.has(r[2].trim())),
+      ...rows.slice(1).filter(r => r.length >= 3 && SPINCARE_ASINS.has((r[2] ?? '').trim())),
     ];
     console.log(`  Total rows: ${rows.length}, Spincare rows (inc. header): ${filtered.length}`);
 
