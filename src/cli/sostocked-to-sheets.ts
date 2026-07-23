@@ -140,19 +140,34 @@ async function main() {
     console.log('Opening export panel...');
     await page.screenshot({ path: screenshotPath }); // screenshot of inventory page
 
-    // The export button is a .btn-outline-secondary (top-right, no visible text).
-    // Log all btn-outline-secondary buttons so we can see what's available.
-    const allExportBtns = page.locator('button.btn-outline-secondary');
-    const btnCount = await allExportBtns.count();
-    console.log(`  Found ${btnCount} btn-outline-secondary button(s)`);
+    // Log all visible buttons to identify the export button's attributes
+    const allBtns = page.locator('button:visible');
+    const btnCount = await allBtns.count();
+    console.log(`  Found ${btnCount} visible button(s) on page:`);
     for (let i = 0; i < btnCount; i++) {
-      const txt  = await allExportBtns.nth(i).innerText().catch(() => '');
-      const ttip = await allExportBtns.nth(i).getAttribute('title').catch(() => '');
-      console.log(`    [${i}] text="${txt.trim()}" title="${ttip}"`);
+      const txt      = (await allBtns.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
+      const title    = await allBtns.nth(i).getAttribute('title').catch(() => '');
+      const aria     = await allBtns.nth(i).getAttribute('aria-label').catch(() => '');
+      const cls      = (await allBtns.nth(i).getAttribute('class').catch(() => '') ?? '').substring(0, 60);
+      const dataOrig = await allBtns.nth(i).getAttribute('data-original-title').catch(() => '');
+      if (txt || title || aria || dataOrig) { // only log buttons with some identifying info
+        console.log(`    [${i}] text="${txt}" title="${title}" aria="${aria}" data-orig="${dataOrig}" class="${cls}"`);
+      }
     }
 
-    // Click the last one (top-right export button based on user description)
-    await allExportBtns.last().click();
+    // Try to find the export button by title/aria attributes, then fall back to icon class
+    const exportBtn =
+      page.locator('button[title*="xport"], button[title*="xcell"]').first().or(
+      page.locator('button[aria-label*="xport" i]').first()).or(
+      page.locator('button[data-original-title*="xport" i]').first()).or(
+      page.locator('button:has([class*="cloud"],[class*="export"],[class*="upload"],[class*="download"])').first());
+
+    const exportBtnCount = await exportBtn.count();
+    console.log(`  Export button matched: ${exportBtnCount > 0}`);
+    if (exportBtnCount === 0) {
+      throw new Error('Could not locate export button — check logs above for the correct selector');
+    }
+    await exportBtn.click();
     await page.waitForTimeout(2000);
 
     // Screenshot after panel opens so we can see what appeared
