@@ -31,7 +31,6 @@ const NUMERIC_HEADERS = new Set([
   'FBA Available Stock',
   'Stock Out Days (past 365)',
   'Stock Out % (past 365)',
-  'Transfer By',
   'Transfer Amount',
   'Days Left (FBA + Inbound)',
   'Days Left (FBA + Warehouse + Inbound/On Order)',
@@ -44,27 +43,17 @@ const NUMERIC_HEADERS = new Set([
   'Package Weight',
 ]);
 
-// Numeric columns where blank → 0 instead of ''
+// Numeric columns where any blank/non-numeric value → 0
 const ZERO_FILL_HEADERS = new Set([
   'Potential Stock Out Days',
 ]);
 
-// Date columns — converted to Google Sheets date serial
-const DATE_HEADERS = new Set([
-  'Next Stock Out Date',
-]);
-
-// Google Sheets date serial: days since 30 Dec 1899
-const SHEETS_EPOCH = new Date(Date.UTC(1899, 11, 30)).getTime();
-function toSheetDate(v: string): number | string {
-  if (!v.trim()) return '';
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? v : Math.round((d.getTime() - SHEETS_EPOCH) / 86400000);
-}
+// Next Stock Out Date and Transfer By: pass through as plain text (no conversion)
 
 function toNum(v: string, zeroFill = false): number | string {
-  if (!v.trim()) return zeroFill ? 0 : '';
-  const n = parseFloat(v.replace(/,/g, ''));
+  const t = v.trim();
+  if (!t) return zeroFill ? 0 : '';
+  const n = parseFloat(t.replace(/,/g, ''));
   return isFinite(n) ? n : (zeroFill ? 0 : v);
 }
 
@@ -253,17 +242,18 @@ async function main() {
     const marketplaceIdx = header.findIndex(h => h.trim().toLowerCase().includes('marketplace'));
     console.log(`  Marketplace column: index ${marketplaceIdx} ("${header[marketplaceIdx] ?? 'not found'}")`);
 
+    // Log all CSV headers to diagnose any name mismatches
+    console.log(`  CSV headers (${header.length}): ${header.map((h, i) => `[${i}]"${h.trim()}"`).join(', ')}`);
+
     // Map column indices by type
     const numericIndices  = new Set<number>();
     const zeroFillIndices = new Set<number>();
-    const dateIndices     = new Set<number>();
     header.forEach((h, i) => {
       const t = h.trim();
       if (NUMERIC_HEADERS.has(t))   numericIndices.add(i);
-      if (ZERO_FILL_HEADERS.has(t)) zeroFillIndices.add(i);
-      if (DATE_HEADERS.has(t))      dateIndices.add(i);
+      if (ZERO_FILL_HEADERS.has(t)) { numericIndices.add(i); zeroFillIndices.add(i); }
     });
-    console.log(`  Numeric: ${numericIndices.size}, Zero-fill: ${zeroFillIndices.size}, Date: ${dateIndices.size} column(s) mapped`);
+    console.log(`  Numeric: ${numericIndices.size} col(s), Zero-fill: ${zeroFillIndices.size} col(s)`);
 
     const filtered = [
       header,
@@ -279,7 +269,6 @@ async function main() {
           return true;
         })
         .map(r => r.map((v, i) => {
-          if (dateIndices.has(i))     return toSheetDate(v);
           if (zeroFillIndices.has(i)) return toNum(v, true);
           if (numericIndices.has(i))  return toNum(v);
           return v;
