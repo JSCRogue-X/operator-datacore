@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 // amazon-shipments-to-sheets.ts
-// Fetches active FBA inbound shipments from Amazon SP-API (UK + DE) and
-// writes them to the "Shipments" tab in the Automations spreadsheet.
+// Fetches active FBA inbound shipments from Amazon SP-API
+// Fulfillment Inbound v2024-03-20 and writes them to the "Shipments"
+// tab in the Automations spreadsheet.
 // Run: npx tsx src/cli/amazon-shipments-to-sheets.ts
 
 import 'dotenv/config';
@@ -18,16 +19,10 @@ const HEADERS = [
   'Ship to', 'SKUs', 'Units',
 ];
 
-const MARKETPLACES = [
-  { id: 'A1F83G8C2ARO7P', code: 'UK' },
-  { id: 'A1PA6795UKMFR9', code: 'DE' },
-];
-
-// All non-terminal statuses — closed/cancelled/deleted are excluded
-const ACTIVE_STATUSES = [
-  'WORKING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED',
-  'CHECKED_IN', 'RECEIVING', 'READY_TO_SHIP',
-];
+// Terminal shipment statuses — skip these rows
+const EXCLUDED_STATUSES = new Set([
+  'CLOSED', 'CANCELLED', 'DELETED', 'ABANDONED', 'INACTIVE',
+]);
 
 const STATUS_LABELS: Record<string, string> = {
   WORKING:       'Working',
@@ -37,81 +32,118 @@ const STATUS_LABELS: Record<string, string> = {
   CHECKED_IN:    'Checked in',
   RECEIVING:     'Receiving',
   READY_TO_SHIP: 'Ready to ship',
+  MIXED:         'Mixed',
+  RECEIVED:      'Received',
   CLOSED:        'Closed',
 };
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Types for v2024-03-20 API ────────────────────────────────────────────────
 
-interface InboundShipmentInfo {
-  ShipmentId:                     string;
-  ShipmentName:                   string;
-  ShipmentStatus:                 string;
-  DestinationFulfillmentCenterId: string;
+interface InboundPlan {
+  inboundPlanId: string;
+  name:          string;
+  status:        string;
+  createdAt?:    string;
+  updatedAt?:    string;
 }
 
-interface ShipmentItem {
-  SellerSKU:         string;
-  QuantityShipped:   number;
-  QuantityReceived?: number;
+interface V2024Shipment {
+  shipmentId:   string;
+  warehouseId?: string;
+  status?:      string;
+  name?:        string;
 }
 
-// ── API helpers ──────────────────────────────────────────────────────────────
+interface V2024Item {
+  msku:               string;
+  quantity?:          number;
+  quantityReceived?:  number;
+}
 
-async function getShipments(
-  client: SpApiClient,
-  marketplaceId: string,
-): Promise<InboundShipmentInfo[]> {
-  const results: InboundShipmentInfo[] = [];
-  let nextToken: string | undefined;
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// ── API helpers (v2024-03-20) ────────────────────────────────────────────────
+
+async function listAllPlans(client: SpApiClient): Promise<InboundPlan[]> {
+  const results: InboundPlan[] = [];
+  let paginationToken: string | undefined;
 
   do {
-    const query: Record<string, string | string[] | undefined> = nextToken
-      ? { QueryType: 'NEXT_TOKEN', NextToken: nextToken, MarketplaceId: marketplaceId }
-      : { QueryType: 'SHIPMENT', ShipmentStatusList: ACTIVE_STATUSES, MarketplaceId: marketplaceId };
-
-    const resp = await client.request<{
-      payload?: { ShipmentData?: InboundShipmentInfo[]; NextToken?: string };
-    }>({ method: 'GET', path: '/fba/inbound/v0/shipments', query });
-
-    const amzPayload = resp.payload.payload;
-    results.push(...(amzPayload?.ShipmentData ?? []));
-    nextToken = amzPayload?.NextToken;
-  } while (nextToken);
-
-  return results;
-}
-
-async function getShipmentItems(
-  client: SpApiClient,
-  shipmentId: string,
-  marketplaceId: string,
-): Promise<ShipmentItem[]> {
-  const results: ShipmentItem[] = [];
-  let nextToken: string | undefined;
-
-  do {
-    const query: Record<string, string | undefined> = {
-      MarketplaceId: marketplaceId,
-      ...(nextToken ? { NextToken: nextToken } : {}),
+    const query: Record<string, string | number | undefined> = {
+      pageSize: 50,
+      sortBy:    'LAST_UPDATED_TIME',
+      sortOrder: 'DESC',
+      ...(paginationToken ? { paginationToken } : {}),
     };
 
     const resp = await client.request<{
-      payload?: { ItemData?: ShipmentItem[]; NextToken?: string };
-    }>({ method: 'GET', path: `/fba/inbound/v0/shipments/${shipmentId}/items`, query });
+      inboundPlans?: InboundPlan[];
+      pagination?:   { nextToken?: string };
+    }>({ method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans', query });
 
-    const amzPayload = resp.payload.payload;
-    results.push(...(amzPayload?.ItemData ?? []));
-    nextToken = amzPayload?.NextToken;
-  } while (nextToken);
+    results.push(...(resp.payload.inboundPlans ?? []));
+    paginationToken = resp.payload.pagination?.nextToken;
+  } while (paginationToken);
 
   return results;
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+async function listShipments(client: SpApiClient, planId: string): Promise<V2024Shipment[]> {
+  const results: V2024Shipment[] = [];
+  let paginationToken: string | undefined;
+
+  do {
+    const query: Record<string, string | number | undefined> = {
+      pageSize: 50,
+      ...(paginationToken ? { paginationToken } : {}),
+    };
+
+    const resp = await client.request<{
+      shipments?:  V2024Shipment[];
+      pagination?: { nextToken?: string };
+    }>({ method: 'GET', path: `/inbound/fba/2024-03-20/inboundPlans/${planId}/shipments`, query });
+
+    results.push(...(resp.payload.shipments ?? []));
+    paginationToken = resp.payload.pagination?.nextToken;
+  } while (paginationToken);
+
+  return results;
+}
+
+async function listShipmentItems(client: SpApiClient, planId: string, shipmentId: string): Promise<V2024Item[]> {
+  const results: V2024Item[] = [];
+  let paginationToken: string | undefined;
+
+  do {
+    const query: Record<string, string | number | undefined> = {
+      pageSize: 50,
+      ...(paginationToken ? { paginationToken } : {}),
+    };
+
+    const resp = await client.request<{
+      items?:      V2024Item[];
+      pagination?: { nextToken?: string };
+    }>({ method: 'GET', path: `/inbound/fba/2024-03-20/inboundPlans/${planId}/shipments/${shipmentId}/items`, query });
+
+    results.push(...(resp.payload.items ?? []));
+    paginationToken = resp.payload.pagination?.nextToken;
+  } while (paginationToken);
+
+  return results;
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Amazon Shipments → Google Sheets');
-  console.log('---------------------------------');
+  console.log('Amazon Shipments → Google Sheets (v2024-03-20)');
+  console.log('------------------------------------------------');
 
   const clientId     = process.env.SP_API_LWA_CLIENT_ID;
   const clientSecret = process.env.SP_API_LWA_CLIENT_SECRET;
@@ -122,46 +154,48 @@ async function main() {
   }
   const spClient = new SpApiClient({ region, clientId, clientSecret, refreshToken });
 
-  // Fetch all active shipments across marketplaces; deduplicate by ShipmentId
-  const shipmentMap = new Map<string, { info: InboundShipmentInfo; marketplaceId: string }>();
-  for (const market of MARKETPLACES) {
-    console.log(`\nFetching shipments for ${market.code}...`);
-    const shipments = await getShipments(spClient, market.id);
-    console.log(`  ${shipments.length} shipment(s)`);
-    for (const s of shipments) {
-      if (s.ShipmentName.toUpperCase().includes('AGL')) continue;
-      shipmentMap.set(s.ShipmentId, { info: s, marketplaceId: market.id });
+  console.log('Fetching inbound plans...');
+  const plans = await listAllPlans(spClient);
+  console.log(`  ${plans.length} plan(s) found`);
+
+  const outputRows: (string | number)[][] = [];
+
+  for (const plan of plans) {
+    if (plan.name.toUpperCase().includes('AGL')) {
+      console.log(`  Skipping AGL: ${plan.name}`);
+      continue;
+    }
+
+    const shipments = await listShipments(spClient, plan.inboundPlanId);
+    const active    = shipments.filter(s => !EXCLUDED_STATUSES.has(s.status ?? ''));
+    if (active.length === 0) continue;
+
+    console.log(`  ${plan.name} → ${active.length} active shipment(s)`);
+
+    for (const shipment of active) {
+      const items        = await listShipmentItems(spClient, plan.inboundPlanId, shipment.shipmentId);
+      const skuCount     = new Set(items.map(i => i.msku)).size;
+      const totalExpect  = items.reduce((n, i) => n + (i.quantity         ?? 0), 0);
+      const totalReceived = items.reduce((n, i) => n + (i.quantityReceived ?? 0), 0);
+
+      outputRows.push([
+        plan.name,
+        shipment.shipmentId,
+        STATUS_LABELS[shipment.status ?? ''] ?? (shipment.status ?? ''),
+        formatDate(plan.createdAt),
+        formatDate(plan.updatedAt),
+        shipment.warehouseId ?? '',
+        skuCount,
+        `${totalReceived}/${totalExpect}`,
+      ]);
     }
   }
-  console.log(`\nTotal unique shipments: ${shipmentMap.size}`);
 
-  // Build output rows — fetch items per shipment for SKU count and unit totals
-  const outputRows: (string | number)[][] = [];
-  for (const [shipmentId, { info, marketplaceId }] of shipmentMap) {
-    console.log(`  Items for ${shipmentId} (${info.ShipmentName})...`);
-    const items = await getShipmentItems(spClient, shipmentId, marketplaceId);
-
-    const skuCount      = new Set(items.map(i => i.SellerSKU)).size;
-    const totalShipped  = items.reduce((n, i) => n + (i.QuantityShipped  ?? 0), 0);
-    const totalReceived = items.reduce((n, i) => n + (i.QuantityReceived ?? 0), 0);
-
-    outputRows.push([
-      info.ShipmentName,
-      info.ShipmentId,
-      STATUS_LABELS[info.ShipmentStatus] ?? info.ShipmentStatus,
-      '', // Created at   — not available from FBA Inbound v0 API
-      '', // Last updated — not available from FBA Inbound v0 API
-      info.DestinationFulfillmentCenterId,
-      skuCount,
-      `${totalReceived}/${totalShipped}`,
-    ]);
-  }
-
-  // Sort by shipment name
   outputRows.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  console.log(`\nTotal rows: ${outputRows.length}`);
 
   // ── Google Sheets ──────────────────────────────────────────────────────
-  console.log('\nWriting to Google Sheets...');
+  console.log('Writing to Google Sheets...');
   const auth = new google.auth.GoogleAuth({
     keyFile: KEY_FILE,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
