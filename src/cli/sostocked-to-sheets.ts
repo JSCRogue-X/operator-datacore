@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 // Logs into SoStocked, downloads the "1. PA" inventory export,
 // filters to Spincare ASINs (~85 rows), and writes the result to
-// the "Claude Test" tab in OOS Tracking.
+// the "SoS Export" tab in OOS Tracking, starting at column B.
 // Run: npx tsx src/cli/sostocked-to-sheets.ts
 
 import 'dotenv/config';
@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 const SPREADSHEET_ID = '1QriRw0CXwEeKF_qsFajLeEnCKErx0t6vKFbKM59H9iM';
-const TAB_NAME       = 'Claude Test';
+const TAB_NAME       = 'SoS Export';
 const KEY_FILE       = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
   'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 
@@ -57,8 +57,8 @@ async function main() {
   const password = process.env.SOSTOCKED_PASSWORD;
   if (!email || !password) throw new Error('SOSTOCKED_EMAIL and SOSTOCKED_PASSWORD must be set');
 
-  console.log('SoStocked → OOS Tracking (Claude Test)');
-  console.log('----------------------------------------');
+  console.log('SoStocked → OOS Tracking (SoS Export)');
+  console.log('--------------------------------------');
 
   console.log('Launching browser...');
   const browser = await chromium.launch({ headless: true });
@@ -138,34 +138,16 @@ async function main() {
 
     // ── Step 3: Open the export panel ────────────────────────────────────────
     console.log('Opening export panel...');
-    await page.screenshot({ path: screenshotPath }); // screenshot of inventory page
+    await page.screenshot({ path: screenshotPath });
 
-    // Log all visible buttons to identify the export button's attributes
-    const allBtns = page.locator('button:visible');
-    const btnCount = await allBtns.count();
-    console.log(`  Found ${btnCount} visible button(s) on page:`);
-    for (let i = 0; i < btnCount; i++) {
-      const txt      = (await allBtns.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
-      const title    = await allBtns.nth(i).getAttribute('title').catch(() => '');
-      const aria     = await allBtns.nth(i).getAttribute('aria-label').catch(() => '');
-      const cls      = (await allBtns.nth(i).getAttribute('class').catch(() => '') ?? '').substring(0, 60);
-      const dataOrig = await allBtns.nth(i).getAttribute('data-original-title').catch(() => '');
-      if (txt || title || aria || dataOrig) { // only log buttons with some identifying info
-        console.log(`    [${i}] text="${txt}" title="${title}" aria="${aria}" data-orig="${dataOrig}" class="${cls}"`);
-      }
-    }
-
-    // Try to find the export button by title/aria attributes, then fall back to icon class
     const exportBtn =
       page.locator('button[title*="xport"], button[title*="xcell"]').first().or(
       page.locator('button[aria-label*="xport" i]').first()).or(
       page.locator('button[data-original-title*="xport" i]').first()).or(
       page.locator('button:has([class*="cloud"],[class*="export"],[class*="upload"],[class*="download"])').first());
 
-    const exportBtnCount = await exportBtn.count();
-    console.log(`  Export button matched: ${exportBtnCount > 0}`);
-    if (exportBtnCount === 0) {
-      throw new Error('Could not locate export button — check logs above for the correct selector');
+    if (await exportBtn.count() === 0) {
+      throw new Error('Could not locate export button — check screenshot artifact');
     }
     await exportBtn.click();
     await page.waitForTimeout(2000);
@@ -242,18 +224,19 @@ async function main() {
     const auth   = new google.auth.GoogleAuth({ keyFile: KEY_FILE, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // Clear from column B onwards (column A is preserved)
     await sheets.spreadsheets.values.clear({
       spreadsheetId: SPREADSHEET_ID,
-      range:         `${TAB_NAME}!A:ZZ`,
+      range:         `${TAB_NAME}!B:ZZ`,
     });
     await sheets.spreadsheets.values.update({
       spreadsheetId:    SPREADSHEET_ID,
-      range:            `${TAB_NAME}!A1`,
+      range:            `${TAB_NAME}!B1`,
       valueInputOption: 'RAW',
       requestBody:      { values: filtered },
     });
 
-    console.log(`\nDone — ${filtered.length - 1} Spincare row(s) written to "${TAB_NAME}".`);
+    console.log(`\nDone — ${filtered.length - 1} Spincare row(s) written to "${TAB_NAME}" from column B.`);
     console.log(`View: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 
   } catch (err) {
