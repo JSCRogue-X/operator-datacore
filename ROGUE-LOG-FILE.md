@@ -6,6 +6,35 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 23 July 2026 (session 2)
+
+**SoStocked CSV parser — multi-line cell fix (last non-empty line)**
+- Changed from taking the first line of multi-value CSV cells to the last non-empty line
+- Reason: SoStocked puts UK SKU on line 1 and EU-specific SKU on line 2 for EU-B rows; Excel displays the last line — matching that behaviour gives the correct marketplace SKU
+- Commit: `e220e15`
+
+**New script: oos-pivot-to-tracking.ts**
+- Reads PIVOT!A1:F11: row 4 (A–F) and row 11 (B–C)
+- Finds the current week's row in Tracking!B by picking the most recent date ≤ today (weekly tracking tab, not daily — exact match would fail mid-week)
+- Writes D:L of that row:
+  - D: EU Potential OOS Days (A4), E: EU Last 365 OOS (B4)
+  - F: UK Potential OOS Days (C4), G: UK Last 365 OOS (D4)
+  - H: Grand Total Potential OOS Days (E4), I: Grand Total Last 365 OOS (F4)
+  - J: EU Lost Sales (B11), K: UK Lost Sales (C11)
+  - L: Overall Lost Sales = (J × 0.85) + K (EUR → GBP conversion)
+- Chained in `sostocked-to-sheets.yml` after a 5-second pause for PIVOT formulas to recalculate
+- Script not yet live-tested — Jon to run manually first (next Monday will be the real run)
+
+**Decisions**
+- Weekly date matching: use most recent date ≤ today rather than exact match — workflow runs on Mondays so will be exact in production, but mid-week testing still works
+- EUR → GBP rate hardcoded at 0.85 in the script
+
+**Files created/changed**
+- `src/cli/oos-pivot-to-tracking.ts` — new script
+- `.github/workflows/sostocked-to-sheets.yml` — added 5s wait + PIVOT→Tracking step after SoStocked step
+
+---
+
 ### 23 July 2026
 
 **Disposals Update: redirected to Disposals V2.3, dedup-append, J→P Cost Static copy**
