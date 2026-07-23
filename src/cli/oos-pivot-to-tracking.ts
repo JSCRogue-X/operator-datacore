@@ -57,9 +57,14 @@ async function main() {
   console.log(`  Row 4  → A:${euPotentialOOS} B:${euLast365OOS} C:${ukPotentialOOS} D:${ukLast365OOS} E:${grandTotalPotOOS} F:${grandTotalL365}`);
   console.log(`  Row 11 → B:${euLostSales} C:${ukLostSales}`);
 
-  // ── Step 2: Find today's row in Tracking!B ────────────────────────────────
-  const todayStr = todayDDMMYYYY();
-  console.log(`\nSearching Tracking!B1:B200 for today (${todayStr})...`);
+  // ── Step 2: Find the current week's row in Tracking!B ────────────────────
+  // The Tracking tab has weekly dates (one row per week). We find the most
+  // recent date in column B that is on or before today — so the script works
+  // correctly whether it runs on the exact weekly date or mid-week.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  console.log(`\nSearching Tracking!B1:B200 for most recent date ≤ ${todayDDMMYYYY()}...`);
 
   const trackResp = await sheets.spreadsheets.values.get({
     spreadsheetId:     SPREADSHEET_ID,
@@ -68,16 +73,27 @@ async function main() {
   });
   const trackCol = (trackResp.data.values ?? []).map(r => (r[0] ?? '').toString().trim());
 
-  const rowIdx = trackCol.findIndex(v => v === todayStr);
-  if (rowIdx === -1) {
+  // Parse DD/MM/YYYY; pick the latest date that is ≤ today
+  let bestIdx  = -1;
+  let bestDate = new Date(0);
+  trackCol.forEach((v, i) => {
+    const parts = v.split('/');
+    if (parts.length !== 3) return;
+    const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    if (isNaN(d.getTime())) return;
+    if (d <= today && d > bestDate) { bestDate = d; bestIdx = i; }
+  });
+
+  if (bestIdx === -1) {
     throw new Error(
-      `No row found in Tracking tab for today (${todayStr}). ` +
-      `Add today's date to column B in DD/MM/YYYY format and try again.`,
+      `No date found in Tracking column B that is on or before today (${todayDDMMYYYY()}). ` +
+      `Check that column B has dates in DD/MM/YYYY format.`,
     );
   }
-  // range starts at B1 → rowIdx 0 = sheet row 1
-  const sheetRow = rowIdx + 1;
-  console.log(`  Found at sheet row ${sheetRow}.`);
+  // range starts at B1 → bestIdx 0 = sheet row 1
+  const sheetRow  = bestIdx + 1;
+  const matchedStr = trackCol[bestIdx];
+  console.log(`  Using row ${sheetRow} (${matchedStr}).`);
 
   // ── Step 3: Calculate Overall Lost Sales ──────────────────────────────────
   const euLS  = toNum(euLostSales);
@@ -117,7 +133,7 @@ async function main() {
     },
   });
 
-  console.log(`\nDone — Tracking row ${sheetRow} (${todayStr}) updated with D:L values.`);
+  console.log(`\nDone — Tracking row ${sheetRow} (${matchedStr}) updated with D:L values.`);
   console.log(`View: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
 
