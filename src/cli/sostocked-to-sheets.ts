@@ -124,8 +124,9 @@ async function main() {
 
     // ── Step 2: Navigate to inventory ────────────────────────────────────────
     console.log('Navigating to inventory...');
-    await page.goto('https://app.sostocked.com/me/inventory', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000); // let the page settle
+    await page.goto('https://app.sostocked.com/me/inventory', { waitUntil: 'domcontentloaded' });
+    // Wait for the "1. PA" tab to be visible — confirms the page has rendered
+    await page.waitForSelector('text=1. PA', { timeout: 30000 });
 
     // ── Step 3: Click "1. PA" tab and verify URL ─────────────────────────────
     console.log('Clicking "1. PA" tab...');
