@@ -8,6 +8,39 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ### 23 July 2026
 
+**Disposals Update: redirected to Disposals V2.3, dedup-append, J→P Cost Static copy**
+- Target changed: Disposals V2.3 (`1GC9MZxpMhmhw8QGi8-dAhXsruwbBhpsQEaWR9RLdMZE`), tab "Disposals Data"
+- Replaced clear-and-overwrite with dedup-append (dedup key: Order ID + SKU)
+- After appending new rows A–I, waits 3 seconds for Sheets to compute column J (EUR>GBP formula)
+- Reads column J with `valueRenderOption: 'UNFORMATTED_VALUE'` and writes values as static numbers into column P (Cost Static)
+- Removed `IPI_SHEET_ID` env var from `disposals.yml` workflow
+- Schedule unchanged: Monday 6:30am UTC
+
+**FBA Customer Returns → Sheets: redirected to Amazon Returns 3.0**
+- Target changed: Amazon Returns 3.0 (`1914IxosqiCMMQO1-UsePsjaHurB_6g16AQuh-y6TZD0`), tab "Amazon Data"
+- Replaced clear-and-overwrite with dedup-append (dedup key: License Plate Number)
+- Preserves existing 8,958+ rows of data already in the sheet
+
+**Amazon Shipments → Sheets: aborted and removed**
+- Attempted to build using SP-API Fulfillment Inbound v0 (0 results — old API doesn't see new plan-based shipments)
+- Rewrote for v2024-03-20 `listInboundPlans` → `listShipments`, but `listShipments` returned 403 Unauthorized
+- Root cause: refresh token likely needs re-authorisation in Seller Central after adding Fulfillment Inbound role
+- Decision: removed script and workflow from GitHub rather than wait; can be rebuilt after app re-authorisation
+
+**Decisions**
+- Column J → P freeze pattern: Sheets API computes formulas server-side; read with `UNFORMATTED_VALUE` after a delay to get the numeric result
+- SP-API v0 inbound API does not see shipments created via the new v2024-03-20 plan workflow
+
+**Files changed**
+- `src/cli/disposals-to-sheets.ts` — full rewrite (new target, dedup-append, J→P copy)
+- `.github/workflows/disposals.yml` — removed `IPI_SHEET_ID`
+- `src/cli/returns-to-sheets.ts` — new target, dedup-append
+- `.github/workflows/returns-to-sheets.yml` — removed `IPI_SHEET_ID`
+- `src/cli/amazon-shipments-to-sheets.ts` — DELETED
+- `.github/workflows/amazon-shipments-to-sheets.yml` — DELETED
+
+---
+
 **New script: amazon-shipments-to-sheets.ts**
 - Pulls active FBA inbound shipments for UK and DE marketplaces from SP-API Fulfillment Inbound v0
 - Writes to "Shipments" tab in Automations spreadsheet (`1AH5S_335Jj2BS18Am9i37hlAYo4UVaAGdUX94XpV7b4`)
