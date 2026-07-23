@@ -98,16 +98,35 @@ async function fetchReplenOrders(
       throw new Error(`SearchProcessedOrders page ${page} failed: ${resp.status} ${text}`);
     }
 
-    const data = await resp.json() as
-      | { TotalEntries?: number; PageEntries?: LinnworksOrder[] }
-      | LinnworksOrder[];
+    const raw = await resp.json() as unknown;
+    // Diagnostic: show response shape so we can fix field names if needed
+    if (page === 1) {
+      if (Array.isArray(raw)) {
+        console.log(`  Response: array of ${raw.length} item(s)`);
+        if (raw.length > 0) console.log(`  First item keys: ${Object.keys(raw[0] as object).join(', ')}`);
+      } else if (raw && typeof raw === 'object') {
+        console.log(`  Response keys: ${Object.keys(raw as object).join(', ')}`);
+        const anyRaw = raw as Record<string, unknown>;
+        for (const k of Object.keys(anyRaw)) {
+          const v = anyRaw[k];
+          if (Array.isArray(v)) console.log(`  "${k}" is array of ${v.length} item(s)${v.length > 0 ? ` — first keys: ${Object.keys(v[0] as object).join(', ')}` : ''}`);
+          else console.log(`  "${k}" = ${JSON.stringify(v)}`);
+        }
+      }
+    }
+
+    const data = raw as { TotalEntries?: number; PageEntries?: LinnworksOrder[] } | LinnworksOrder[];
 
     let entries: LinnworksOrder[];
     if (Array.isArray(data)) {
       entries = data;
     } else {
-      entries = data.PageEntries ?? [];
+      entries = (data as Record<string, unknown[]>)['Data'] as LinnworksOrder[]
+               ?? (data as Record<string, unknown[]>)['Orders'] as LinnworksOrder[]
+               ?? data.PageEntries
+               ?? [];
     }
+    console.log(`  Page ${page}: ${entries.length} total entries`);
 
     // Filter to SubSource = "REPLEN" (case-insensitive)
     const replenEntries = entries.filter(o =>
