@@ -119,23 +119,24 @@ async function main() {
     if (!passwordFilled) throw new Error('Could not locate password input — check screenshot artifact');
 
     await page.click('button[type="submit"]');
-    await page.waitForURL(url => !url.href.includes('/login'), { timeout: 20000 });
+    // Wait until the callback fully resolves and we land on the actual app
+    await page.waitForURL(
+      url => !url.href.includes('/login') && !url.href.includes('/callback'),
+      { timeout: 30000 },
+    );
     console.log(`  Logged in. URL: ${page.url()}`);
 
-    // ── Step 2: Navigate to inventory ────────────────────────────────────────
-    console.log('Navigating to inventory...');
-    await page.goto('https://app.sostocked.com/me/inventory', { waitUntil: 'domcontentloaded' });
-    // Wait for the "1. PA" tab to be visible — confirms the page has rendered
-    await page.waitForSelector('text=1. PA', { timeout: 30000 });
+    // ── Step 2: Navigate directly to the 1.PA inventory view ─────────────────
+    // Navigate with page_view_id in the URL to avoid needing to click the tab
+    // (the tab is inside a collapsed dropdown so it is never visible to click)
+    console.log('Navigating to 1.PA inventory view...');
+    await page.goto('https://app.sostocked.com/me/inventory?page_view_id=433959', { waitUntil: 'domcontentloaded' });
+    // Wait for the export button to confirm the inventory table has rendered
+    await page.waitForSelector('button.btn-outline-secondary', { timeout: 30000 });
+    await page.waitForTimeout(2000);
+    console.log(`  Inventory loaded. URL: ${page.url()}`);
 
-    // ── Step 3: Click "1. PA" tab and verify URL ─────────────────────────────
-    console.log('Clicking "1. PA" tab...');
-    await page.getByText('1. PA', { exact: true }).click();
-    await page.waitForURL('*page_view_id=433959*', { timeout: 15000 });
-    await page.waitForTimeout(2000); // let the tab's data load
-    console.log(`  Tab confirmed. URL: ${page.url()}`);
-
-    // ── Step 4: Open the export panel ────────────────────────────────────────
+    // ── Step 3: Open the export panel ────────────────────────────────────────
     // The export button is a .btn-outline-secondary button (top-right) that
     // contains an "Export to Excel" child element (no visible text on the button itself).
     console.log('Opening export panel...');
@@ -150,7 +151,7 @@ async function main() {
     await exportBtn.click();
     await page.waitForTimeout(1500); // wait for the panel to open
 
-    // ── Step 5: Click Download in the export panel ────────────────────────────
+    // ── Step 4: Click Download in the export panel ────────────────────────────
     console.log('Clicking Download...');
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 30000 }),
@@ -161,7 +162,7 @@ async function main() {
     await download.saveAs(csvPath);
     console.log(`  Downloaded to: ${csvPath}`);
 
-    // ── Step 6: Parse and filter CSV ─────────────────────────────────────────
+    // ── Step 5: Parse and filter CSV ─────────────────────────────────────────
     console.log('Parsing and filtering CSV...');
     const text     = fs.readFileSync(csvPath, 'utf-8');
     const rows     = parseCSV(text);
@@ -179,7 +180,7 @@ async function main() {
       );
     }
 
-    // ── Step 7: Write to Google Sheets ───────────────────────────────────────
+    // ── Step 6: Write to Google Sheets ───────────────────────────────────────
     console.log('\nConnecting to Google Sheets...');
     const auth   = new google.auth.GoogleAuth({ keyFile: KEY_FILE, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
