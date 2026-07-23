@@ -77,8 +77,8 @@ async function fetchReplenOrders(
   let page = 1;
 
   while (true) {
-    // Source filter removed from request body — fetch all orders and filter client-side.
-    // This lets us see real field names in the diagnostic output.
+    // REPLEN orders have SubSource = "REPLEN" (Source = "DATAIMPC").
+    // Filter client-side — server-side Source filter returns 0 because Source != "REPLEN".
     const resp = await fetch(`${session.server}/api/ProcessedOrders/SearchProcessedOrders`, {
       method:  'POST',
       headers: { Authorization: session.token, 'Content-Type': 'application/json' },
@@ -107,30 +107,13 @@ async function fetchReplenOrders(
       entries = data;
     } else {
       entries = data.PageEntries ?? [];
-      if (page === 1) {
-        const total = (data as Record<string, unknown>).TotalEntries ?? '?';
-        console.log(`  API reports ${total} total order(s) in date range`);
-      }
     }
 
-    // Diagnostic: log first order's keys and Source/SubSource on first page
-    if (page === 1) {
-      console.log(`  Page 1 returned ${entries.length} raw order(s)`);
-      if (entries.length > 0) {
-        const first = entries[0] as Record<string, unknown>;
-        console.log(`  First order keys: ${Object.keys(first).join(', ')}`);
-        console.log(`  First order Source="${first['Source']}" SubSource="${first['SubSource']}"`);
-      }
-    }
+    // Filter to SubSource = "REPLEN" (case-insensitive)
+    const replenEntries = entries.filter(o =>
+      String(o.SubSource ?? '').toUpperCase() === 'REPLEN',
+    );
 
-    // Client-side REPLEN filter — checks Source and SubSource (case-insensitive)
-    const replenEntries = entries.filter(o => {
-      const src = String(o.Source ?? '').toUpperCase();
-      const sub = String(o.SubSource ?? '').toUpperCase();
-      return src === 'REPLEN' || sub === 'REPLEN';
-    });
-
-    console.log(`  Page ${page}: ${entries.length} total, ${replenEntries.length} REPLEN`);
     all.push(...replenEntries);
     if (entries.length < 200) break;
     page++;
@@ -150,8 +133,8 @@ async function main() {
   console.log(`  Session OK. Server: ${session.server}`);
 
   const toDate   = new Date();
-  const fromDate = new Date(toDate.getTime() - 90 * 24 * 60 * 60 * 1000); // widened to 90 days for diagnostics
-  console.log(`Fetching orders from ${fromDate.toISOString().slice(0, 10)} to ${toDate.toISOString().slice(0, 10)} (90-day window)...`);
+  const fromDate = new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  console.log(`Fetching orders from ${fromDate.toISOString().slice(0, 10)} to ${toDate.toISOString().slice(0, 10)}...`);
 
   const orders = await fetchReplenOrders(session, fromDate, toDate);
   console.log(`  ${orders.length} REPLEN order(s) fetched`);
