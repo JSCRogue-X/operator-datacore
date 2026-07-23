@@ -70,13 +70,15 @@ async function main() {
   try {
     // ── Step 1: Login ────────────────────────────────────────────────────────
     console.log('Logging in to SoStocked...');
-    await page.goto('https://app.sostocked.com/login', { waitUntil: 'networkidle' });
+    await page.goto('https://app.sostocked.com/login', { waitUntil: 'domcontentloaded' });
+    console.log(`  Redirected to: ${page.url()}`);
 
-    // Screenshot so we can see the login page in the artifact
+    // Auth0 universal login renders the form via JS after the redirect — wait for
+    // a visible (non-hidden) input to appear rather than relying on networkidle
+    await page.waitForSelector('input:not([type="hidden"])', { timeout: 30000 });
+
+    // Screenshot so we can see the login page state in the artifact
     await page.screenshot({ path: screenshotPath });
-
-    // Wait for any input to appear (React SPA may render slowly)
-    await page.waitForSelector('input', { timeout: 15000 });
 
     // Fill email — try multiple selector patterns in order
     const emailSelectors = [
