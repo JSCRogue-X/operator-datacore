@@ -81,14 +81,16 @@ async function fetchReplenOrders(
       method:  'POST',
       headers: { Authorization: session.token, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        DateField:      'received',
-        FromDate:       from.toISOString(),
-        ToDate:         to.toISOString(),
-        SearchField:    'Source',
-        SearchTerm:     'REPLEN',
-        ExactMatch:     true,
-        PageNumber:     page,
-        EntriesPerPage: 200,
+        request: {
+          DateField:         'RECEIVED',
+          FromDate:          from.toISOString(),
+          ToDate:            to.toISOString(),
+          SearchField:       'Source',
+          SearchTerm:        'REPLEN',
+          ExactMatch:        true,
+          PageNumber:        page,
+          NumEntriesPerPage: 200,
+        },
       }),
     });
 
