@@ -98,35 +98,16 @@ async function fetchReplenOrders(
       throw new Error(`SearchProcessedOrders page ${page} failed: ${resp.status} ${text}`);
     }
 
-    const raw = await resp.json() as unknown;
-    // Diagnostic: show response shape so we can fix field names if needed
+    // Response shape: { ProcessedOrders: { PageNumber, EntriesPerPage, TotalEntries, TotalPages, Data: [...] } }
+    const raw = await resp.json() as {
+      ProcessedOrders?: { Data?: LinnworksOrder[]; TotalEntries?: number; TotalPages?: number };
+    };
+
+    const po      = raw.ProcessedOrders;
+    const entries = po?.Data ?? [];
     if (page === 1) {
-      if (Array.isArray(raw)) {
-        console.log(`  Response: array of ${raw.length} item(s)`);
-        if (raw.length > 0) console.log(`  First item keys: ${Object.keys(raw[0] as object).join(', ')}`);
-      } else if (raw && typeof raw === 'object') {
-        console.log(`  Response keys: ${Object.keys(raw as object).join(', ')}`);
-        const anyRaw = raw as Record<string, unknown>;
-        for (const k of Object.keys(anyRaw)) {
-          const v = anyRaw[k];
-          if (Array.isArray(v)) console.log(`  "${k}" is array of ${v.length} item(s)${v.length > 0 ? ` — first keys: ${Object.keys(v[0] as object).join(', ')}` : ''}`);
-          else console.log(`  "${k}" = ${JSON.stringify(v)}`);
-        }
-      }
+      console.log(`  API: ${po?.TotalEntries ?? '?'} total orders across ${po?.TotalPages ?? '?'} page(s)`);
     }
-
-    const data = raw as { TotalEntries?: number; PageEntries?: LinnworksOrder[] } | LinnworksOrder[];
-
-    let entries: LinnworksOrder[];
-    if (Array.isArray(data)) {
-      entries = data;
-    } else {
-      entries = (data as Record<string, unknown[]>)['Data'] as LinnworksOrder[]
-               ?? (data as Record<string, unknown[]>)['Orders'] as LinnworksOrder[]
-               ?? data.PageEntries
-               ?? [];
-    }
-    console.log(`  Page ${page}: ${entries.length} total entries`);
 
     // Filter to SubSource = "REPLEN" (case-insensitive)
     const replenEntries = entries.filter(o =>
@@ -158,14 +139,13 @@ async function main() {
   const orders = await fetchReplenOrders(session, fromDate, toDate);
   console.log(`  ${orders.length} REPLEN order(s) fetched`);
 
-  // Filter: only orders with a ProcessedDate; dedup by Order ID
+  // Filter: only orders with a ProcessedDate; dedup by nOrderId
   const seenIds = new Set<number>();
   const filtered: LinnworksOrder[] = [];
   for (const o of orders) {
-    const id = o.pkOrderId ?? o.nOrderId;
+    const id = o.nOrderId;
     if (!id) continue;
-    const pd = o.dProcessedOn ?? o.ProcessedDate;
-    if (!pd) continue;         // skip if no ProcessedDate
+    if (!o.dProcessedOn) continue;  // skip if no ProcessedDate
     if (seenIds.has(id)) continue;
     seenIds.add(id);
     filtered.push(o);
@@ -173,13 +153,14 @@ async function main() {
   console.log(`  ${filtered.length} order(s) after filter (ProcessedDate set, deduped by Order ID)`);
 
   // Build output rows: A-F
+  // API field names confirmed from response: nOrderId, dReceivedDate, cCountry, dProcessedOn
   const outputRows = filtered.map(o => [
-    o.pkOrderId ?? o.nOrderId ?? '',
+    o.nOrderId ?? '',
     o.ReferenceNum ?? '',
-    toSheetDate(o.dReceievedDate ?? o.dReceivedDate),
+    toSheetDate(o.dReceivedDate ?? o.dReceievedDate),  // API uses dReceivedDate (no double-i typo)
     o.cCountry ?? o.Country ?? '',
-    o.bProcessed ?? o.Processed ?? true,
-    toSheetDate(o.dProcessedOn ?? o.ProcessedDate),
+    true,   // all rows from SearchProcessedOrders are processed
+    toSheetDate(o.dProcessedOn),
   ]);
 
   // Sort by received date ascending
