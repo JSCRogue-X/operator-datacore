@@ -224,10 +224,10 @@ async function main() {
     const auth   = new google.auth.GoogleAuth({ keyFile: KEY_FILE, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Clear from column B onwards (column A is preserved)
+    // Clear only B:X — preserves column A and any formula columns (Y, Z, etc.)
     await sheets.spreadsheets.values.clear({
       spreadsheetId: SPREADSHEET_ID,
-      range:         `${TAB_NAME}!B:ZZ`,
+      range:         `${TAB_NAME}!B:X`,
     });
     await sheets.spreadsheets.values.update({
       spreadsheetId:    SPREADSHEET_ID,
