@@ -77,7 +77,7 @@ async function listAllPlans(client: SpApiClient): Promise<InboundPlan[]> {
 
   do {
     const query: Record<string, string | number | undefined> = {
-      pageSize: 50,
+      pageSize: 30,
       sortBy:    'LAST_UPDATED_TIME',
       sortOrder: 'DESC',
       ...(paginationToken ? { paginationToken } : {}),
@@ -101,7 +101,7 @@ async function listShipments(client: SpApiClient, planId: string): Promise<V2024
 
   do {
     const query: Record<string, string | number | undefined> = {
-      pageSize: 50,
+      pageSize: 30,
       ...(paginationToken ? { paginationToken } : {}),
     };
 
@@ -123,7 +123,7 @@ async function listShipmentItems(client: SpApiClient, planId: string, shipmentId
 
   do {
     const query: Record<string, string | number | undefined> = {
-      pageSize: 50,
+      pageSize: 30,
       ...(paginationToken ? { paginationToken } : {}),
     };
 
