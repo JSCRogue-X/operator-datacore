@@ -6,6 +6,20 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 24 July 2026
+
+**PIVOT → Tracking script confirmed working**
+- Jon tested `oos-pivot-to-tracking.ts` locally — reads PIVOT rows 4 and 11, finds the current week's row, writes D:L correctly
+
+**Removed commented-out cron from sostocked-to-sheets.yml**
+- Workflow is triggered by an external cron job service, not GitHub Actions schedule
+- Cleaned up the commented `schedule:` block — `workflow_dispatch` only
+
+**Files changed**
+- `.github/workflows/sostocked-to-sheets.yml` — removed commented cron lines
+
+---
+
 ### 23 July 2026 (session 2)
 
 **SoStocked CSV parser — multi-line cell fix (last non-empty line)**
