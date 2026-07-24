@@ -1,9 +1,7 @@
 name: SoStocked → OOS Tracking
 
 on:
-  workflow_dispatch:  # Run manually first to verify, then add a schedule below
-  # schedule:
-  #   - cron: '0 7 * * 1'  # Every Monday at 7am UTC — uncomment once working
+  workflow_dispatch:
 
 permissions:
   contents: read
