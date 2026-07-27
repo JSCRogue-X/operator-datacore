@@ -13,8 +13,8 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 - Amazon Shipments script — dropped, will not pursue; script already removed from repo (23 Jul)
 - Dropbox API task — dropped, will not pursue
 
-**Today's task**
-- Switch SoStocked account to support (Jon — manual task)
+**Completed**
+- SoStocked account switched to support ✓
 
 ---
 
