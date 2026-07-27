@@ -4,12 +4,12 @@
 // on anchor dates set inside the Launch section.
 //
 // Three anchors mirror the spreadsheet sections:
-//   "Place Purchase Order" → PO section tasks
-//   "Completion Date"      → Completion section tasks
-//   "Launch Date"          → Launch section tasks (currently the only one in the template)
+//   Section 5 → "Place purchase order" subtask → PO section tasks
+//   Section 5 → "Completion Date" subtask       → Completion section tasks
+//   Section 6 → "Launch Date" subtask           → Launch section tasks
 //
-// To enable the PO and Completion sections, add subtasks named exactly
-// "Place Purchase Order" and "Completion Date" to the 6. Launch task in the template.
+// Anchor dates are read from Section 5 (Production) and Section 6 (Launch).
+// All due dates are set on Section 6 subtasks.
 //
 // Run: npx tsx src/cli/clickup-new-product-launch.ts
 
@@ -318,8 +318,27 @@ async function applyOffsets(
 async function processNewProductJob(parent: CuTask): Promise<void> {
   console.log(`\nProcessing: ${parent.name} (${parent.id})`);
 
-  // Find the "6. Launch" section within this job
+  // Get all top-level sections of this job
   const sections = await getSubtasks(parent.id);
+  const bySection = new Map(sections.map(s => [s.name.trim().toLowerCase(), s]));
+
+  // ── Section 5: read PO and Completion Date anchors ───────────────────────
+  const section5 = sections.find(s => s.name.trim().toLowerCase().startsWith('5'));
+  let poMs:         number | null = null;
+  let completionMs: number | null = null;
+
+  if (section5) {
+    const s5Tasks = await getSubtasks(section5.id);
+    const s5ByName = new Map(s5Tasks.map(t => [t.name.trim().toLowerCase(), t]));
+    const poTask         = s5ByName.get('place purchase order');
+    const completionTask = s5ByName.get('completion date');
+    if (poTask?.due_date)         poMs         = parseInt(poTask.due_date, 10);
+    if (completionTask?.due_date) completionMs = parseInt(completionTask.due_date, 10);
+  } else {
+    console.log('  ⚠  Section 5 not found — PO and Completion Date anchors unavailable.');
+  }
+
+  // ── Section 6: read Launch Date anchor and get tasks to process ───────────
   const launchSection = sections.find(s => s.name.trim().toLowerCase().startsWith('6'));
   if (!launchSection) {
     console.log('  No "6. Launch" section found — skipping.');
@@ -334,18 +353,12 @@ async function processNewProductJob(parent: CuTask): Promise<void> {
   }
 
   const byName = new Map(subtasks.map(s => [s.name.trim().toLowerCase(), s]));
-
-  // Read anchor dates
-  const poMs         = byName.get('place purchase order')?.due_date
-    ? parseInt(byName.get('place purchase order')!.due_date!, 10) : null;
-  const completionMs = byName.get('completion date')?.due_date
-    ? parseInt(byName.get('completion date')!.due_date!, 10) : null;
-  const launchMs     = byName.get('launch date')?.due_date
+  const launchMs = byName.get('launch date')?.due_date
     ? parseInt(byName.get('launch date')!.due_date!, 10) : null;
 
-  if (!poMs)         console.log('  ⚠  "Place Purchase Order" anchor not set — PO section skipped. Add it as a subtask to the template to enable.');
-  if (!completionMs) console.log('  ⚠  "Completion Date" anchor not set — Completion section skipped. Add it as a subtask to the template to enable.');
-  if (!launchMs)     console.log('  ⚠  "Launch Date" anchor not set — Launch section skipped.');
+  if (!poMs)         console.log('  ⚠  "Place purchase order" not set in Section 5 — PO section skipped.');
+  if (!completionMs) console.log('  ⚠  "Completion Date" not set in Section 5 — Completion section skipped.');
+  if (!launchMs)     console.log('  ⚠  "Launch Date" not set in Section 6 — Launch section skipped.');
 
   if (!poMs && !completionMs && !launchMs) {
     console.log('  No anchor dates set. Skipping.');
