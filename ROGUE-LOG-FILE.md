@@ -6,6 +6,39 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 27 July 2026 (session 2)
+
+**ClickUp New Product Launch automation — fully working**
+
+- Fixed tag discovery: tag was on "6. Launch" child task (not the parent) — removed `!t.parent` filter, added `subtasks=true` to tag search, added dedup by task ID (API was returning same task twice)
+- Refactored `processNewProductJob` → `processJob(launchSection, parentId)` — handles tag on either parent or launch section directly
+- Fixed assignees API format: ClickUp requires `{ add: [...], rem: [] }` not a plain array
+- Populated `ASSIGNEES` table with Jon Scoulding (32614246) for all 66 tasks (testing only — will swap to production assignees when live list is ready)
+- Added start dates (assign dates) from the spreadsheet: offset tables changed from `Record<string, number>` to `Record<string, [dueOffset, assignDays]>` — start date = due date minus assign days
+- New `setDates()` function sets both `start_date` and `due_date` in one API call
+- Skip logic: due date + start date locked once set; backfills missing start dates on existing tasks without recalculating due dates
+- Completed task detection expanded: catches status type `closed` and `done`, plus status names `complete`, `completed`, `done` (confirmed "COMPLETED" is caught via `type === 'closed'`)
+
+**Decisions**
+- Dates are set once and locked — re-running the script on an existing job is safe and idempotent
+- `TEST_ASSIGNEE_ID = null` — ASSIGNEES table is now the source of truth (all set to Jon for now)
+- `new-product` tag stays on "6. Launch" section task — script handles this directly
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — all above changes
+
+**Commits**
+- `a438fb9` — Fix tag discovery + refactor processJob + fix assignees API format
+- `4cc6d9a` — Skip tasks that already have a due date set
+- `d454795` — Add start dates (assign dates) to all tasks
+- `63f83e8` — Skip completed tasks regardless of whether a due date is set
+
+**Next steps**
+- Swap ASSIGNEES table to production user IDs (Will Murphy, Anthony Taylor, Laura, Paul Atkinson) when ready to go live
+- Place `new-product` tag on real jobs when they are ready to have dates set
+
+---
+
 ### 27 July 2026
 
 **Closures**

@@ -186,6 +186,17 @@ const HAS_SUB_SUBTASKS = new Set([
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
+interface CuChecklistItem {
+  id: string;
+  name: string;
+  assignee: { id: number } | null;
+}
+
+interface CuChecklist {
+  id: string;
+  items: CuChecklistItem[];
+}
+
 interface CuTask {
   id: string;
   name: string;
@@ -193,6 +204,7 @@ interface CuTask {
   due_date: string | null;
   start_date: string | null;
   status: { type: string; status: string };
+  checklists?: CuChecklist[];
   subtasks?: CuTask[];
   tags: { name: string }[];
 }
@@ -274,6 +286,24 @@ async function postComment(taskId: string, text: string): Promise<void> {
   });
 }
 
+async function assignChecklistItems(
+  checklists: CuChecklist[],
+  assignDateMs: number,
+  assigneeId: number | undefined,
+): Promise<void> {
+  for (const cl of checklists) {
+    for (const item of cl.items) {
+      const body: Record<string, unknown> = { name: item.name, due_date: assignDateMs };
+      if (assigneeId) body.assignee = assigneeId;
+      await cuFetch(`/checklist/${cl.id}/checklist_item/${item.id}`, {
+        method: 'PUT',
+        body:   JSON.stringify(body),
+      });
+      console.log(`    CHECKLIST: "${item.name}" → ${fmtDate(assignDateMs)}`);
+    }
+  }
+}
+
 // ── Core processing ───────────────────────────────────────────────────────────
 
 async function applyOffsets(
@@ -298,12 +328,19 @@ async function applyOffsets(
       console.log(`  SKIP (completed): "${task.name}"`);
       continue;
     }
+    const assigneeIds = TEST_ASSIGNEE_ID !== null
+      ? [TEST_ASSIGNEE_ID]
+      : (ASSIGNEES[nameLower] ?? []);
+
     if (task.due_date) {
       // Due date already set — only add start date if it's missing and expected
       if (assignDays > 0 && !task.start_date) {
         const existingDueMs = parseInt(task.due_date, 10);
         const startMs       = addDays(existingDueMs, -assignDays);
         await setDates(task.id, existingDueMs, startMs);
+        if (task.checklists?.length) {
+          await assignChecklistItems(task.checklists, startMs, assigneeIds[0]);
+        }
         console.log(`  ADD START: "${task.name}" → start ${fmtDate(startMs)}`);
         updated++;
         if (HAS_SUB_SUBTASKS.has(nameLower)) {
@@ -319,15 +356,15 @@ async function applyOffsets(
       continue;
     }
 
-    const dueMs    = addDays(anchorMs, offset);
-    const startMs  = assignDays > 0 ? addDays(dueMs, -assignDays) : null;
-    const sign     = offset >= 0 ? `+${offset}` : `${offset}`;
-    const assigneeIds = TEST_ASSIGNEE_ID !== null
-      ? [TEST_ASSIGNEE_ID]
-      : (ASSIGNEES[nameLower] ?? []);
+    const dueMs   = addDays(anchorMs, offset);
+    const startMs = assignDays > 0 ? addDays(dueMs, -assignDays) : null;
+    const sign    = offset >= 0 ? `+${offset}` : `${offset}`;
 
     await setDates(task.id, dueMs, startMs);
     if (assigneeIds.length) await setAssignees(task.id, assigneeIds);
+    if (task.checklists?.length) {
+      await assignChecklistItems(task.checklists, startMs ?? dueMs, assigneeIds[0]);
+    }
 
     const startStr = startMs ? ` (start ${fmtDate(startMs)})` : '';
     lines.push(`  ${task.name}: due ${fmtDate(dueMs)}${startStr} (${anchorLabel} ${sign}d)`);
