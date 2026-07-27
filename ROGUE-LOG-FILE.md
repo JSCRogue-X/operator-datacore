@@ -208,8 +208,8 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 - Source (eBay/Shopify) dropped from aggregation — combined into single total per SKU per week
 - Append-only to IHS2 so historical data from ih-sales-to-ihs2.ts backfill is preserved
 
-**Next session**
-- Historical backfill: add `--year`/`--month` CLI args to `linnworks-30-day-sales-to-sheets.ts` so older months can be run individually to fill in data before the backfill start date
+**Note**
+- `--year`/`--month` CLI args added to `linnworks-30-day-sales-to-sheets.ts` — completed
 
 **Files changed**
 - `src/cli/linnworks-30-day-sales-to-sheets.ts` — endpoint fix, weekly aggregation, IHS2 target, append mode
