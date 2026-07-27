@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-// Finds jobs tagged "new-product", locates the "6. Launch" section within each,
-// and sets due dates + assignee on all subtasks (and their sub-subtasks) based
-// on anchor dates set inside the Launch section.
+// Finds tasks tagged "new-product" and sets due dates + assignees on all
+// subtasks (and their sub-subtasks) based on anchor dates.
+// The tag may be on the parent job OR on "6. Launch" directly — both are handled.
 //
 // Three anchors mirror the spreadsheet sections:
 //   Section 5 → "Place purchase order" subtask → PO section tasks
@@ -19,79 +19,78 @@ const WORKSPACE_ID    = '20480650';
 const NEW_PRODUCT_TAG = 'new-product';
 const API_BASE        = 'https://api.clickup.com/api/v2';
 
-// Testing: all tasks assigned to Jon (32614246). Swap TEST_ASSIGNEE_ID to null
-// and populate ASSIGNEES below once out of testing.
-const TEST_ASSIGNEE_ID: number | null = 32614246; // jon@spincare.co.uk — set to null for production
+const TEST_ASSIGNEE_ID: number | null = null;
 
-// Production assignees by subtask name (lowercase). Only used when TEST_ASSIGNEE_ID is null.
-// Multiple user IDs per task are supported.
+const JON = 32614246; // jon@spincare.co.uk
+
+// Assignees by subtask name (lowercase). Multiple user IDs per task are supported.
 const ASSIGNEES: Record<string, number[]> = {
-  'duplicate product launch sheet':                          [/* will murphy */],
-  'provide launch/retail/list pricing for amazon locales':   [/* anthony taylor */],
-  'provide features/benefits for the products':             [/* anthony taylor */],
-  'product demo':                                           [/* anthony taylor */],
-  'provide image brief notes':                              [/* anthony taylor */],
-  'complete marketing handover':                            [/* anthony taylor */],
-  'create maxamaze project':                                [/* laura haygarth-borland */],
-  'request reach report':                                   [/* jon scoulding */],
-  'review/approve reach report':                            [/* jon scoulding */],
-  'save reach report to google drive':                      [/* jon scoulding */],
-  'upload reach report to pcm':                             [/* jon scoulding */],
-  'create/save sds (factory)':                              [/* jon scoulding */],
-  'review/approve factory sds':                             [/* jon scoulding */],
-  'request production samples':                             [/* paul atkinson */],
-  'maxamaze project complete':                              [/* laura haygarth-borland */],
-  'basic mintsoft sku setup':                               [/* jon scoulding */],
-  'basic linnworks import':                                 [/* jon scoulding */],
-  'create mkl':                                             [/* will murphy */],
-  'create listing data':                                    [/* will murphy */],
-  'research/setup ppc campaigns':                           [/* will murphy */],
-  'create sp campaigns':                                    [/* will murphy */],
-  'add to branded search campaign':                         [/* will murphy */],
-  'create negative keyword list':                           [/* will murphy */],
-  'update/add negative master keyword list':                [/* will murphy */],
-  'add pts as negative product targets':                    [/* will murphy */],
-  'review listing':                                         [/* anthony taylor, laura */],
-  'listing amends':                                         [/* will murphy */],
-  'approve listing':                                        [/* anthony taylor, laura */],
-  'complete ih launch template':                            [/* laura, will murphy */],
-  'import & list products on ih channels':                  [/* will murphy */],
-  'create flat file template':                              [/* will murphy */],
-  'sub task - add b2b pricing':                             [/* will murphy */],
-  'sub task - set max order quantity to 20':                [/* will murphy */],
-  'sub task upload to amazon / close listing':              [/* will murphy */],
-  'sostocked sku setup':                                    [/* paul atkinson */],
-  'create/save sds (fast track)':                           [/* jon scoulding */],
-  'review/approve fast track sds completed.':               [/* jon scoulding */],
-  'complete pcm entry':                                     [/* jon scoulding */],
-  'upload sds':                                             [/* will murphy */],
-  'send test shipment':                                     [/* jon scoulding */],
-  'inventory - ship inventory to amazon uk':                [/* paul atkinson */],
-  'inventory - ship inventory to amazon eu':                [/* paul atkinson */],
-  'add images to listing':                                  [/* will murphy */],
-  'launch email campaign':                                  [/* laura haygarth-borland */],
-  'ebay promoted listing setup':                            [/* will murphy */],
-  'ebay add multi-buy discounts':                           [/* will murphy */],
-  'add shopify multi-buy discounts':                        [/* will murphy */],
-  'announce launch on social media':                        [/* will murphy */],
-  'amazon launch':                                          [/* will murphy */],
-  'add to marketing kpi tracker':                           [/* laura haygarth-borland */],
-  'enrol in vine (if using)':                               [/* will murphy */],
-  'create coupon':                                          [/* will murphy */],
-  'add to rank radar':                                      [/* will murphy */],
-  'add cost price into sellerboard.io':                     [/* anthony taylor */],
-  'enter cogs into sellerboard':                            [/* will murphy */],
-  'add asin to storefront':                                 [/* will murphy */],
-  'sub task - add asin to home page':                       [/* will murphy */],
-  'sub task - add asin to category page':                   [/* will murphy */],
-  'weekly review price':                                    [/* will murphy */],
-  'add campaigns to scale insights automation':             [/* will murphy */],
-  'negative keyword check':                                 [/* will murphy */],
-  'check review request automation (captaina)':             [/* will murphy */],
-  'analyse reviews for listing improvements (60 days)':     [/* will murphy */],
-  'analyse reviews for listing improvements (90 days)':     [/* will murphy */],
-  're-order eligibility (60 days)':                         [/* anthony taylor, paul atkinson, laura */],
-  're-order eligibility (90 days)':                         [/* anthony taylor, paul atkinson, laura */],
+  'duplicate product launch sheet':                          [JON],
+  'provide launch/retail/list pricing for amazon locales':   [JON],
+  'provide features/benefits for the products':             [JON],
+  'product demo':                                           [JON],
+  'provide image brief notes':                              [JON],
+  'complete marketing handover':                            [JON],
+  'create maxamaze project':                                [JON],
+  'request reach report':                                   [JON],
+  'review/approve reach report':                            [JON],
+  'save reach report to google drive':                      [JON],
+  'upload reach report to pcm':                             [JON],
+  'create/save sds (factory)':                              [JON],
+  'review/approve factory sds':                             [JON],
+  'request production samples':                             [JON],
+  'maxamaze project complete':                              [JON],
+  'basic mintsoft sku setup':                               [JON],
+  'basic linnworks import':                                 [JON],
+  'create mkl':                                             [JON],
+  'create listing data':                                    [JON],
+  'research/setup ppc campaigns':                           [JON],
+  'create sp campaigns':                                    [JON],
+  'add to branded search campaign':                         [JON],
+  'create negative keyword list':                           [JON],
+  'update/add negative master keyword list':                [JON],
+  'add pts as negative product targets':                    [JON],
+  'review listing':                                         [JON],
+  'listing amends':                                         [JON],
+  'approve listing':                                        [JON],
+  'complete ih launch template':                            [JON],
+  'import & list products on ih channels':                  [JON],
+  'create flat file template':                              [JON],
+  'sub task - add b2b pricing':                             [JON],
+  'sub task - set max order quantity to 20':                [JON],
+  'sub task upload to amazon / close listing':              [JON],
+  'sostocked sku setup':                                    [JON],
+  'create/save sds (fast track)':                           [JON],
+  'review/approve fast track sds completed.':               [JON],
+  'complete pcm entry':                                     [JON],
+  'upload sds':                                             [JON],
+  'send test shipment':                                     [JON],
+  'inventory - ship inventory to amazon uk':                [JON],
+  'inventory - ship inventory to amazon eu':                [JON],
+  'add images to listing':                                  [JON],
+  'launch email campaign':                                  [JON],
+  'ebay promoted listing setup':                            [JON],
+  'ebay add multi-buy discounts':                           [JON],
+  'add shopify multi-buy discounts':                        [JON],
+  'announce launch on social media':                        [JON],
+  'amazon launch':                                          [JON],
+  'add to marketing kpi tracker':                           [JON],
+  'enrol in vine (if using)':                               [JON],
+  'create coupon':                                          [JON],
+  'add to rank radar':                                      [JON],
+  'add cost price into sellerboard.io':                     [JON],
+  'enter cogs into sellerboard':                            [JON],
+  'add asin to storefront':                                 [JON],
+  'sub task - add asin to home page':                       [JON],
+  'sub task - add asin to category page':                   [JON],
+  'weekly review price':                                    [JON],
+  'add campaigns to scale insights automation':             [JON],
+  'negative keyword check':                                 [JON],
+  'check review request automation (captaina)':             [JON],
+  'analyse reviews for listing improvements (60 days)':     [JON],
+  'analyse reviews for listing improvements (90 days)':     [JON],
+  're-order eligibility (60 days)':                         [JON],
+  're-order eligibility (90 days)':                         [JON],
 };
 
 // ── Offset tables (days from anchor) ─────────────────────────────────────────
@@ -226,14 +225,17 @@ function fmtDate(ms: number): string {
 }
 
 async function getTasksForTag(tag: string): Promise<CuTask[]> {
+  const seen  = new Set<string>();
   const tasks: CuTask[] = [];
   let page = 0;
   while (true) {
     const data = await cuFetch(
-      `/team/${WORKSPACE_ID}/task?tags[]=${tag}&include_closed=false&subtasks=false&page=${page}`,
+      `/team/${WORKSPACE_ID}/task?tags[]=${tag}&include_closed=false&subtasks=true&page=${page}`,
     ) as { tasks: CuTask[] };
     if (!data.tasks?.length) break;
-    tasks.push(...data.tasks.filter(t => !t.parent));
+    for (const t of data.tasks) {
+      if (!seen.has(t.id)) { seen.add(t.id); tasks.push(t); }
+    }
     if (data.tasks.length < 100) break;
     page++;
   }
@@ -256,7 +258,7 @@ async function setAssignees(taskId: string, userIds: number[]): Promise<void> {
   if (!userIds.length) return;
   await cuFetch(`/task/${taskId}`, {
     method: 'PUT',
-    body: JSON.stringify({ assignees: userIds }),
+    body: JSON.stringify({ assignees: { add: userIds, rem: [] } }),
   });
 }
 
@@ -315,12 +317,11 @@ async function applyOffsets(
   return { updated, missing };
 }
 
-async function processNewProductJob(parent: CuTask): Promise<void> {
-  console.log(`\nProcessing: ${parent.name} (${parent.id})`);
+async function processJob(launchSection: CuTask, parentId: string): Promise<void> {
+  console.log(`\nProcessing: ${launchSection.name} (${launchSection.id}), parent: ${parentId}`);
 
-  // Get all top-level sections of this job
-  const sections = await getSubtasks(parent.id);
-  const bySection = new Map(sections.map(s => [s.name.trim().toLowerCase(), s]));
+  // Get sibling sections to find Section 5 anchors
+  const sections = await getSubtasks(parentId);
 
   // ── Section 5: read PO and Completion Date anchors ───────────────────────
   const section5 = sections.find(s => s.name.trim().toLowerCase().startsWith('5'));
@@ -338,12 +339,7 @@ async function processNewProductJob(parent: CuTask): Promise<void> {
     console.log('  ⚠  Section 5 not found — PO and Completion Date anchors unavailable.');
   }
 
-  // ── Section 6: read Launch Date anchor and get tasks to process ───────────
-  const launchSection = sections.find(s => s.name.trim().toLowerCase().startsWith('6'));
-  if (!launchSection) {
-    console.log('  No "6. Launch" section found — skipping.');
-    return;
-  }
+  // ── Section 6: get subtasks and read Launch Date anchor ──────────────────
   console.log(`  Launch section: "${launchSection.name}" (${launchSection.id})`);
 
   const subtasks = await getSubtasks(launchSection.id);
@@ -401,7 +397,7 @@ async function processNewProductJob(parent: CuTask): Promise<void> {
   }
   lines.push(`\n${totalUpdated} task(s) updated. Run at ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}.`);
 
-  await postComment(parent.id, lines.join('\n'));
+  await postComment(parentId, lines.join('\n'));
   console.log(`  Done — ${totalUpdated} updated, ${totalMissing} not found.`);
 }
 
@@ -423,7 +419,19 @@ async function main(): Promise<void> {
   }
 
   for (const job of jobs) {
-    await processNewProductJob(job);
+    if (job.parent) {
+      // Tag is on the launch section itself — process it directly
+      await processJob(job, job.parent);
+    } else {
+      // Tag is on a parent task — find the "6. Launch" section within it
+      const sections = await getSubtasks(job.id);
+      const launchSection = sections.find(s => s.name.trim().toLowerCase().startsWith('6'));
+      if (!launchSection) {
+        console.log(`  No "6. Launch" section found in "${job.name}" — skipping.`);
+        continue;
+      }
+      await processJob(launchSection, job.id);
+    }
   }
 
   console.log('\nDone.');
