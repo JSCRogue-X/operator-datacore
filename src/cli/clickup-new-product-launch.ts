@@ -289,6 +289,10 @@ async function applyOffsets(
       console.log(`  SKIP (completed): "${task.name}"`);
       continue;
     }
+    if (task.due_date) {
+      console.log(`  SKIP (date already set): "${task.name}"`);
+      continue;
+    }
 
     const newMs      = addDays(anchorMs, offset);
     const sign       = offset >= 0 ? `+${offset}` : `${offset}`;
