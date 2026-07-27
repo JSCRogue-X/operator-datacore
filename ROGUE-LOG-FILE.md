@@ -6,6 +6,38 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 27 July 2026 (session 3)
+
+**ClickUp New Product Launch — checklist assignment + delayed assignee plan**
+
+- Fixed checklist assignment: ClickUp does not include `checklists[]` in embedded subtask objects — added individual `GET /task/{id}` fetch after setting dates to get full task data including checklists
+- Wired `assignChecklistItems()` into both paths in `applyOffsets`: new-task path and ADD START backfill path — checklist items get the task's start date and same assignee
+- Start dates now set for ALL tasks including 0-day tasks: `assignDays=0` tasks get `start_date = due_date` (previously no start date was set for these)
+- Removed `assignDays > 0` guard on backfill path — consistent rule: every task always has a start date
+
+**Decisions**
+- Tasks with `assignDays=0` get `start_date = due_date` so the daily assignment runner has one consistent signal for all tasks
+- Assignees will be removed from the initial script — instead a new daily runner will assign tasks whose start date has arrived (avoids inbox flood when a product is kicked off with 60+ tasks)
+- "Weekly Review Price" confirmed as the only recurring task — interval 7 days; awaiting Paul's confirmation of the reopen status before building
+- "Negative Keyword Check" is NOT a recurring task (confirmed by Jon)
+- ClickUp Automations will not be used for recurring tasks — GitHub Actions cron will handle it instead (scales better across many product launches)
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — all above changes
+
+**Commits**
+- `b658dab` — feat: assign checklist items on section 6 launch tasks
+- `6e5658b` — fix: fetch full task to get checklists (ClickUp omits checklists from subtask objects)
+- `9c893ee` — feat: always set start date, including 0-day tasks
+
+**Next steps**
+- Remove assignees from initial script (dates only on first run)
+- Build daily GitHub Actions runner: assigns tasks whose start_date <= today and have no assignee yet
+- Confirm reopen status with Paul, then build Weekly Review Price recurring task feature
+- Swap ASSIGNEES table to production user IDs when ready to go live
+
+---
+
 ### 27 July 2026 (session 2)
 
 **ClickUp New Product Launch automation — fully working**
