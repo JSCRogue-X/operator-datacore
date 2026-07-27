@@ -6,6 +6,18 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 27 July 2026
+
+**Closures**
+- PIVOT → Tracking automation confirmed working end-to-end — no further work needed
+- Amazon Shipments script — dropped, will not pursue; script already removed from repo (23 Jul)
+- Dropbox API task — dropped, will not pursue
+
+**Today's task**
+- Switch SoStocked account to support (Jon — manual task)
+
+---
+
 ### 24 July 2026
 
 **PIVOT → Tracking script confirmed working**
