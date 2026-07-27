@@ -95,84 +95,86 @@ const ASSIGNEES: Record<string, number[]> = {
 
 // ── Offset tables (days from anchor) ─────────────────────────────────────────
 
-// Section 1: anchored to "Place Purchase Order" date (positive = after PO)
-// Requires a subtask named "Place Purchase Order" to be added to the template.
-const FROM_PO: Record<string, number> = {
-  'duplicate product launch sheet':                         1,
-  'provide launch/retail/list pricing for amazon locales':  7,
-  'provide features/benefits for the products':             7,
-  'product demo':                                           7,
-  'provide image brief notes':                              7,
-  'complete marketing handover':                            7,
-  'create maxamaze project':                                8,
-  'request reach report':                                  14,
-  'review/approve reach report':                           14,
-  'save reach report to google drive':                     14,
-  'upload reach report to pcm':                            14,
-  'create/save sds (factory)':                             14,
-  'review/approve factory sds':                            14,
+// Offset tables: [dueOffset, assignDays]
+// dueOffset  = days from anchor to due date (negative = before anchor)
+// assignDays = days before due date to set as start date (0 = same day, no start date set)
+
+// Section 1: anchored to "Place Purchase Order" date
+const FROM_PO: Record<string, [number, number]> = {
+  'duplicate product launch sheet':                         [1,  1],
+  'provide launch/retail/list pricing for amazon locales':  [7,  2],
+  'provide features/benefits for the products':            [7,  2],
+  'product demo':                                          [7,  2],
+  'provide image brief notes':                             [7,  2],
+  'complete marketing handover':                           [7,  2],
+  'create maxamaze project':                               [8,  2],
+  'request reach report':                                  [14, 0],
+  'review/approve reach report':                           [14, 0],
+  'save reach report to google drive':                     [14, 0],
+  'upload reach report to pcm':                            [14, 0],
+  'create/save sds (factory)':                             [14, 0],
+  'review/approve factory sds':                            [14, 0],
 };
 
-// Section 2: anchored to "Completion Date" (negative = before completion)
-// Requires a subtask named "Completion Date" to be added to the template.
-const FROM_COMPLETION: Record<string, number> = {
-  'request production samples':    0,
-  'maxamaze project complete':   -14,
-  'basic mintsoft sku setup':    -30,
-  'basic linnworks import':      -30,
+// Section 2: anchored to "Completion Date"
+const FROM_COMPLETION: Record<string, [number, number]> = {
+  'request production samples':    [0,   0],
+  'maxamaze project complete':     [-14, 1],
+  'basic mintsoft sku setup':      [-30, 2],
+  'basic linnworks import':        [-30, 2],
 };
 
-// Section 3: anchored to "Launch Date" — this subtask already exists in the template
-const FROM_LAUNCH: Record<string, number> = {
-  'create mkl':                                            -90,
-  'create listing data':                                   -90,
-  'research/setup ppc campaigns':                          -90,
-  'create sp campaigns':                                   -90,  // sub-subtask
-  'add to branded search campaign':                        -90,  // sub-subtask
-  'create negative keyword list':                          -90,  // sub-subtask
-  'update/add negative master keyword list':               -90,  // sub-subtask
-  'add pts as negative product targets':                   -90,  // sub-subtask
-  'review listing':                                        -81,
-  'listing amends':                                        -81,
-  'approve listing':                                       -74,
-  'complete ih launch template':                           -60,
-  'import & list products on ih channels':                 -60,
-  'create flat file template':                             -60,
-  'sub task - add b2b pricing':                            -60,  // sub-subtask
-  'sub task - set max order quantity to 20':               -60,  // sub-subtask
-  'sub task upload to amazon / close listing':             -60,  // sub-subtask
-  'sostocked sku setup':                                   -59,
-  'create/save sds (fast track)':                          -59,
-  'review/approve fast track sds completed.':              -59,
-  'complete pcm entry':                                    -59,
-  'upload sds':                                            -58,
-  'send test shipment':                                    -57,
-  'inventory - ship inventory to amazon uk':               -21,
-  'inventory - ship inventory to amazon eu':               -21,
-  'add images to listing':                                 -14,
-  'launch email campaign':                                 -11,
-  'ebay promoted listing setup':                             0,
-  'ebay add multi-buy discounts':                            0,
-  'add shopify multi-buy discounts':                         0,
-  'announce launch on social media':                         0,
-  'amazon launch':                                           0,
-  'add to marketing kpi tracker':                            0,
-  'enrol in vine (if using)':                                0,
-  'create coupon':                                           0,
-  'add to rank radar':                                       1,
-  'add cost price into sellerboard.io':                      1,
-  'enter cogs into sellerboard':                             1,
-  'add asin to storefront':                                  1,
-  'sub task - add asin to home page':                        1,  // sub-subtask
-  'sub task - add asin to category page':                    1,  // sub-subtask
-  'weekly review price':                                     7,
-  'add campaigns to scale insights automation':             10,
-  'negative keyword check':                                 10,
-  'check review request automation (captaina)':             10,
-  'analyse reviews for listing improvements (60 days)':     14,
-  'analyse reviews for listing improvements (90 days)':     28,
-  're-order eligibility (60 days)':                         60,
-  're-order eligibility (90 days)':                         90,
+// Section 3: anchored to "Launch Date"
+const FROM_LAUNCH: Record<string, [number, number]> = {
+  'create mkl':                                            [-90, 14],
+  'create listing data':                                   [-90, 14],
+  'research/setup ppc campaigns':                          [-90, 14],
+  'create sp campaigns':                                   [-90, 14],  // sub-subtask
+  'add to branded search campaign':                        [-90, 14],  // sub-subtask
+  'create negative keyword list':                          [-90, 14],  // sub-subtask
+  'update/add negative master keyword list':               [-90, 14],  // sub-subtask
+  'add pts as negative product targets':                   [-90, 14],  // sub-subtask
+  'review listing':                                        [-81, 14],
+  'listing amends':                                        [-81,  7],
+  'approve listing':                                       [-74,  7],
+  'complete ih launch template':                           [-60,  7],
+  'import & list products on ih channels':                 [-60,  7],
+  'create flat file template':                             [-60,  7],
+  'sub task - add b2b pricing':                            [-60,  7],  // sub-subtask
+  'sub task - set max order quantity to 20':               [-60,  7],  // sub-subtask
+  'sub task upload to amazon / close listing':             [-60,  7],  // sub-subtask
+  'sostocked sku setup':                                   [-59,  2],
+  'create/save sds (fast track)':                          [-59,  2],
+  'review/approve fast track sds completed.':              [-59,  2],
+  'complete pcm entry':                                    [-59,  2],
+  'upload sds':                                            [-58,  7],
+  'send test shipment':                                    [-57,  2],
+  'inventory - ship inventory to amazon uk':               [-21,  2],
+  'inventory - ship inventory to amazon eu':               [-21,  2],
+  'add images to listing':                                 [-14,  7],
+  'launch email campaign':                                 [-11,  1],
+  'ebay promoted listing setup':                           [0,    7],
+  'ebay add multi-buy discounts':                          [0,    7],
+  'add shopify multi-buy discounts':                       [0,    7],
+  'announce launch on social media':                       [0,    7],
+  'amazon launch':                                         [0,    7],
+  'add to marketing kpi tracker':                          [0,    0],
+  'enrol in vine (if using)':                              [0,    7],
+  'create coupon':                                         [0,    7],
+  'add to rank radar':                                     [1,    7],
+  'add cost price into sellerboard.io':                    [1,    1],
+  'enter cogs into sellerboard':                           [1,    7],
+  'add asin to storefront':                                [1,    7],
+  'sub task - add asin to home page':                      [1,    7],  // sub-subtask
+  'sub task - add asin to category page':                  [1,    7],  // sub-subtask
+  'weekly review price':                                   [7,    1],
+  'add campaigns to scale insights automation':            [10,   1],
+  'negative keyword check':                                [10,   1],
+  'check review request automation (captaina)':            [10,   1],
+  'analyse reviews for listing improvements (60 days)':    [14,   1],
+  'analyse reviews for listing improvements (90 days)':    [28,   1],
+  're-order eligibility (60 days)':                        [60,   7],
+  're-order eligibility (90 days)':                        [90,   7],
 };
 
 // Subtasks that have their own children to process
@@ -189,6 +191,7 @@ interface CuTask {
   name: string;
   parent: string | null;
   due_date: string | null;
+  start_date: string | null;
   status: { type: string };
   subtasks?: CuTask[];
   tags: { name: string }[];
@@ -247,11 +250,13 @@ async function getSubtasks(taskId: string): Promise<CuTask[]> {
   return data.subtasks ?? [];
 }
 
-async function setDueDate(taskId: string, ms: number): Promise<void> {
-  await cuFetch(`/task/${taskId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ due_date: ms, due_date_time: false }),
-  });
+async function setDates(taskId: string, dueMs: number, startMs: number | null): Promise<void> {
+  const body: Record<string, unknown> = { due_date: dueMs, due_date_time: false };
+  if (startMs !== null) {
+    body.start_date      = startMs;
+    body.start_date_time = false;
+  }
+  await cuFetch(`/task/${taskId}`, { method: 'PUT', body: JSON.stringify(body) });
 }
 
 async function setAssignees(taskId: string, userIds: number[]): Promise<void> {
@@ -275,14 +280,14 @@ async function applyOffsets(
   tasks:       CuTask[],
   anchorMs:    number,
   anchorLabel: string,
-  offsets:     Record<string, number>,
+  offsets:     Record<string, [number, number]>,
   lines:       string[],
 ): Promise<{ updated: number; missing: number }> {
   const byName = new Map(tasks.map(t => [t.name.trim().toLowerCase(), t]));
   let updated = 0;
   let missing = 0;
 
-  for (const [nameLower, offset] of Object.entries(offsets)) {
+  for (const [nameLower, [offset, assignDays]] of Object.entries(offsets)) {
     const task = byName.get(nameLower);
     if (!task) { missing++; continue; }
     if (task.status?.type === 'closed') {
@@ -290,21 +295,39 @@ async function applyOffsets(
       continue;
     }
     if (task.due_date) {
-      console.log(`  SKIP (date already set): "${task.name}"`);
+      // Due date already set — only add start date if it's missing and expected
+      if (assignDays > 0 && !task.start_date) {
+        const existingDueMs = parseInt(task.due_date, 10);
+        const startMs       = addDays(existingDueMs, -assignDays);
+        await setDates(task.id, existingDueMs, startMs);
+        console.log(`  ADD START: "${task.name}" → start ${fmtDate(startMs)}`);
+        updated++;
+        if (HAS_SUB_SUBTASKS.has(nameLower)) {
+          const children = await getSubtasks(task.id);
+          if (children.length) {
+            const r = await applyOffsets(children, anchorMs, anchorLabel, offsets, lines);
+            updated += r.updated; missing += r.missing;
+          }
+        }
+      } else {
+        console.log(`  SKIP (dates already set): "${task.name}"`);
+      }
       continue;
     }
 
-    const newMs      = addDays(anchorMs, offset);
-    const sign       = offset >= 0 ? `+${offset}` : `${offset}`;
+    const dueMs    = addDays(anchorMs, offset);
+    const startMs  = assignDays > 0 ? addDays(dueMs, -assignDays) : null;
+    const sign     = offset >= 0 ? `+${offset}` : `${offset}`;
     const assigneeIds = TEST_ASSIGNEE_ID !== null
       ? [TEST_ASSIGNEE_ID]
       : (ASSIGNEES[nameLower] ?? []);
 
-    await setDueDate(task.id, newMs);
+    await setDates(task.id, dueMs, startMs);
     if (assigneeIds.length) await setAssignees(task.id, assigneeIds);
 
-    lines.push(`  ${task.name}: ${fmtDate(newMs)} (${anchorLabel} ${sign}d)`);
-    console.log(`  SET: "${task.name}" → ${fmtDate(newMs)}`);
+    const startStr = startMs ? ` (start ${fmtDate(startMs)})` : '';
+    lines.push(`  ${task.name}: due ${fmtDate(dueMs)}${startStr} (${anchorLabel} ${sign}d)`);
+    console.log(`  SET: "${task.name}" → due ${fmtDate(dueMs)}${startStr}`);
     updated++;
 
     // Go one level deeper if this task has sub-subtasks
