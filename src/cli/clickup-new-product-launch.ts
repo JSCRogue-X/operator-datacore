@@ -338,8 +338,9 @@ async function applyOffsets(
         const existingDueMs = parseInt(task.due_date, 10);
         const startMs       = addDays(existingDueMs, -assignDays);
         await setDates(task.id, existingDueMs, startMs);
-        if (task.checklists?.length) {
-          await assignChecklistItems(task.checklists, startMs, assigneeIds[0]);
+        const fullTask = await cuFetch(`/task/${task.id}`) as CuTask;
+        if (fullTask.checklists?.length) {
+          await assignChecklistItems(fullTask.checklists, startMs, assigneeIds[0]);
         }
         console.log(`  ADD START: "${task.name}" → start ${fmtDate(startMs)}`);
         updated++;
@@ -362,8 +363,9 @@ async function applyOffsets(
 
     await setDates(task.id, dueMs, startMs);
     if (assigneeIds.length) await setAssignees(task.id, assigneeIds);
-    if (task.checklists?.length) {
-      await assignChecklistItems(task.checklists, startMs ?? dueMs, assigneeIds[0]);
+    const fullTask = await cuFetch(`/task/${task.id}`) as CuTask;
+    if (fullTask.checklists?.length) {
+      await assignChecklistItems(fullTask.checklists, startMs ?? dueMs, assigneeIds[0]);
     }
 
     const startStr = startMs ? ` (start ${fmtDate(startMs)})` : '';
