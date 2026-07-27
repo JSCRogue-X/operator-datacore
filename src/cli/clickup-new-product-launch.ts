@@ -192,7 +192,7 @@ interface CuTask {
   parent: string | null;
   due_date: string | null;
   start_date: string | null;
-  status: { type: string };
+  status: { type: string; status: string };
   subtasks?: CuTask[];
   tags: { name: string }[];
 }
@@ -290,7 +290,11 @@ async function applyOffsets(
   for (const [nameLower, [offset, assignDays]] of Object.entries(offsets)) {
     const task = byName.get(nameLower);
     if (!task) { missing++; continue; }
-    if (task.status?.type === 'closed') {
+    const statusType = task.status?.type ?? '';
+    const statusName = (task.status?.status ?? '').toLowerCase();
+    const isComplete = statusType === 'closed' || statusType === 'done'
+      || statusName === 'complete' || statusName === 'completed' || statusName === 'done';
+    if (isComplete) {
       console.log(`  SKIP (completed): "${task.name}"`);
       continue;
     }
