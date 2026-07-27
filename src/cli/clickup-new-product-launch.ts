@@ -333,8 +333,8 @@ async function applyOffsets(
       : (ASSIGNEES[nameLower] ?? []);
 
     if (task.due_date) {
-      // Due date already set — only add start date if it's missing and expected
-      if (assignDays > 0 && !task.start_date) {
+      // Due date already set — add start date if missing (start = due when assignDays is 0)
+      if (!task.start_date) {
         const existingDueMs = parseInt(task.due_date, 10);
         const startMs       = addDays(existingDueMs, -assignDays);
         await setDates(task.id, existingDueMs, startMs);
@@ -358,14 +358,14 @@ async function applyOffsets(
     }
 
     const dueMs   = addDays(anchorMs, offset);
-    const startMs = assignDays > 0 ? addDays(dueMs, -assignDays) : null;
+    const startMs = addDays(dueMs, -assignDays);  // assignDays=0 → start equals due
     const sign    = offset >= 0 ? `+${offset}` : `${offset}`;
 
     await setDates(task.id, dueMs, startMs);
     if (assigneeIds.length) await setAssignees(task.id, assigneeIds);
     const fullTask = await cuFetch(`/task/${task.id}`) as CuTask;
     if (fullTask.checklists?.length) {
-      await assignChecklistItems(fullTask.checklists, startMs ?? dueMs, assigneeIds[0]);
+      await assignChecklistItems(fullTask.checklists, startMs, assigneeIds[0]);
     }
 
     const startStr = startMs ? ` (start ${fmtDate(startMs)})` : '';
