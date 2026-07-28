@@ -204,6 +204,7 @@ interface CuTask {
   due_date: string | null;
   start_date: string | null;
   status: { type: string; status: string };
+  assignees?: { id: number }[];
   checklists?: CuChecklist[];
   subtasks?: CuTask[];
   tags: { name: string }[];
@@ -351,6 +352,14 @@ async function applyOffsets(
             updated += r.updated; missing += r.missing;
           }
         }
+      } else if (!task.assignees?.length && task.start_date && parseInt(task.start_date, 10) <= Date.now()) {
+        // Dates set and start date is today or overdue — assign if not yet assigned
+        if (assigneeIds.length) await setAssignees(task.id, assigneeIds);
+        const fullTask = await cuFetch(`/task/${task.id}`) as CuTask;
+        if (fullTask.checklists?.length) {
+          await assignChecklistItems(fullTask.checklists, parseInt(task.start_date, 10), assigneeIds[0]);
+        }
+        console.log(`  ASSIGN (overdue/due): "${task.name}"`);
       } else {
         console.log(`  SKIP (dates already set): "${task.name}"`);
       }
