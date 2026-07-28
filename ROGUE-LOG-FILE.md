@@ -6,6 +6,33 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 28 July 2026
+
+**Project housekeeping — todo, context, and session summary command**
+
+- Confirmed daily assignment runner: no separate script needed — existing `clickup-new-product-launch.ts` runs daily via cron-job.org and already handles assign-on-start-date logic
+- Created `todo.md` in Claude Folder — all open tasks across ClickUp launch script and Pan-EU
+- Created `context.md` in Claude Folder — living reference document covering all scripts, sheet IDs, people, schedules, and technical gotchas; to be updated each session
+- Created `/session-summary` custom slash command (`.claude/commands/session-summary.md`) — generates timestamped session summary files automatically
+- Created `docs/session-summaries/` folder structure in Claude Folder; first summary saved
+
+**Decisions**
+- `context.md` and `todo.md` to be read at the start of each session to orient quickly
+- `/session-summary` to be run at the end of each session
+
+**Files created**
+- `C:\Users\Spincare-JSC\Documents\Claude Folder\todo.md`
+- `C:\Users\Spincare-JSC\Documents\Claude Folder\context.md`
+- `C:\Users\Spincare-JSC\Documents\Claude Folder\.claude\commands\session-summary.md`
+- `C:\Users\Spincare-JSC\Documents\Claude Folder\docs\session-summaries\2026-07-28-1332-session-summary.md`
+
+**Next steps**
+- Remove assignees from initial script (dates only on first run)
+- Confirm reopen status with Paul, then build Weekly Review Price recurring task feature
+- Swap ASSIGNEES table to production user IDs when ready to go live
+
+---
+
 ### 27 July 2026 (session 3)
 
 **ClickUp New Product Launch — checklist assignment + delayed assignee plan**
@@ -349,3 +376,53 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 - Delete `debug-paneu-raw.ts` and its workflow once confirmed stable
 - Dropbox API task — waiting to confirm sales team want it; need folder path and Excel column layout
 - Update `SPINCARE_ASINS` in `pan-eu-to-sheets.ts` whenever new products are added
+
+---
+
+### 14 July 2026
+
+**Pan-EU Status → Sheets — extended debugging session**
+
+- Diagnosed why Pan-EU script produced 0 rows — extensive column name debugging, switched from SKU to ASIN matching
+- Added diagnostic logging to isolate column name issues
+- Switched from CSV parsing to TSV (report format confirmed as TSV on this date; BOM root cause found next day)
+- Fixed Pan-EU workflow — added missing Supabase env vars
+- Increased job timeout: 30 min → 60 min → 120 minutes (report generation slow in Amazon queue)
+- Implemented cached report fallback — falls back to most recently completed report if fresh generation fails
+- Added `FORCE_CACHED` flag to workflow for testing purposes (later removed)
+- AGL delivery sync: fixed shipment name normalisation for matching; `clickup-agl-sync-delivery.ts` updated
+- Account Health: set to overwrite on every run rather than append
+
+**Files changed**
+- `src/cli/pan-eu-to-sheets.ts` — diagnostic logging, ASIN matching, TSV switch, caching fallback
+- `src/cli/clickup-agl-sync-delivery.ts` — shipment name normalisation
+- `.github/workflows/pan-eu-to-sheets.yml` — timeout increases, Supabase env vars, cached flag
+
+---
+
+### 13 July 2026
+
+**Pan-EU Status → Sheets — initial build**
+
+- Built initial `pan-eu-to-sheets.ts` script — pulls `GET_PAN_EU_OFFER_STATUS` report from SP-API and writes to Automations sheet
+- Added `pan-eu-to-sheets.yml` daily workflow
+- Fixed Listing / No Listing logic for Pan-EU offer columns (two rounds of fixes)
+
+**FBA Customer Returns → Automations sheet**
+
+- Built `returns-to-sheets.ts` — pulls FBA Customer Returns report monthly and writes to Automations sheet
+- Added `returns-to-sheets.yml` workflow — no schedule; triggered externally via cron-job.org
+- Updated column headers to match Jon's spec
+
+**Other changes**
+
+- Moved Account Health to its own separate workflow (`account-health-to-sheets.yml`) running Fridays 2pm UTC — previously bundled in weekly-sheets
+- Fixed missing Supabase env vars in `replen-to-sheets` workflow
+
+**Files created/changed**
+- `src/cli/pan-eu-to-sheets.ts` — new script
+- `.github/workflows/pan-eu-to-sheets.yml` — new workflow
+- `src/cli/returns-to-sheets.ts` — new script
+- `.github/workflows/returns-to-sheets.yml` — new workflow (cron-job.org triggered)
+- `.github/workflows/account-health-to-sheets.yml` — new standalone workflow
+- `.github/workflows/replen-to-sheets.yml` — Supabase env vars fix

@@ -97,84 +97,87 @@ const ASSIGNEES: Record<string, number[]> = {
 
 // Offset tables: [dueOffset, assignDays]
 // dueOffset  = days from anchor to due date (negative = before anchor)
-// assignDays = days before due date to set as start date (0 = same day, no start date set)
+// assignDays = assignDate (H) + daysToComplete (I) from spreadsheet
+//              assignDate = advance notice days before the task starts
+//              daysToComplete = working days the op needs to finish the task
+//              together they give the total lead time before the due date
 
 // Section 1: anchored to "Place Purchase Order" date
 const FROM_PO: Record<string, [number, number]> = {
-  'duplicate product launch sheet':                         [1,  1],
-  'provide launch/retail/list pricing for amazon locales':  [7,  2],
-  'provide features/benefits for the products':            [7,  2],
-  'product demo':                                          [7,  2],
-  'provide image brief notes':                             [7,  2],
-  'complete marketing handover':                           [7,  2],
-  'create maxamaze project':                               [8,  2],
-  'request reach report':                                  [14, 0],
-  'review/approve reach report':                           [14, 0],
-  'save reach report to google drive':                     [14, 0],
-  'upload reach report to pcm':                            [14, 0],
-  'create/save sds (factory)':                             [14, 0],
-  'review/approve factory sds':                            [14, 0],
+  'duplicate product launch sheet':                         [1,   2],  // H1 + I1
+  'provide launch/retail/list pricing for amazon locales':  [7,   9],  // H2 + I7
+  'provide features/benefits for the products':            [7,   9],  // H2 + I7
+  'product demo':                                          [7,   9],  // H2 + I7
+  'provide image brief notes':                             [7,   9],  // H2 + I7
+  'complete marketing handover':                           [7,   9],  // H2 + I7
+  'create maxamaze project':                               [8,   4],  // H2 + I2
+  'request reach report':                                  [14, 14],  // H0 + I14
+  'review/approve reach report':                           [14, 14],  // H0 + I14
+  'save reach report to google drive':                     [14, 14],  // H0 + I14
+  'upload reach report to pcm':                            [14, 14],  // H0 + I14
+  'create/save sds (factory)':                             [14, 14],  // H0 + I14
+  'review/approve factory sds':                            [14, 14],  // H0 + I14
 };
 
 // Section 2: anchored to "Completion Date"
 const FROM_COMPLETION: Record<string, [number, number]> = {
-  'request production samples':    [0,   0],
-  'maxamaze project complete':     [-14, 1],
-  'basic mintsoft sku setup':      [-30, 2],
-  'basic linnworks import':        [-30, 2],
+  'request production samples':    [0,   14],  // H0 + I14
+  'maxamaze project complete':     [-14,  1],  // H1 + I0
+  'basic mintsoft sku setup':      [-30,  4],  // H2 + I2
+  'basic linnworks import':        [-30,  4],  // H2 + I2
 };
 
 // Section 3: anchored to "Launch Date"
 const FROM_LAUNCH: Record<string, [number, number]> = {
-  'create mkl':                                            [-90, 14],
-  'create listing data':                                   [-90, 14],
-  'research/setup ppc campaigns':                          [-90, 14],
-  'create sp campaigns':                                   [-90, 14],  // sub-subtask
-  'add to branded search campaign':                        [-90, 14],  // sub-subtask
-  'create negative keyword list':                          [-90, 14],  // sub-subtask
-  'update/add negative master keyword list':               [-90, 14],  // sub-subtask
-  'add pts as negative product targets':                   [-90, 14],  // sub-subtask
-  'review listing':                                        [-81, 14],
-  'listing amends':                                        [-81,  7],
-  'approve listing':                                       [-74,  7],
-  'complete ih launch template':                           [-60,  7],
-  'import & list products on ih channels':                 [-60,  7],
-  'create flat file template':                             [-60,  7],
-  'sub task - add b2b pricing':                            [-60,  7],  // sub-subtask
-  'sub task - set max order quantity to 20':               [-60,  7],  // sub-subtask
-  'sub task upload to amazon / close listing':             [-60,  7],  // sub-subtask
-  'sostocked sku setup':                                   [-59,  2],
-  'create/save sds (fast track)':                          [-59,  2],
-  'review/approve fast track sds completed.':              [-59,  2],
-  'complete pcm entry':                                    [-59,  2],
-  'upload sds':                                            [-58,  7],
-  'send test shipment':                                    [-57,  2],
-  'inventory - ship inventory to amazon uk':               [-21,  2],
-  'inventory - ship inventory to amazon eu':               [-21,  2],
-  'add images to listing':                                 [-14,  7],
-  'launch email campaign':                                 [-11,  1],
-  'ebay promoted listing setup':                           [0,    7],
-  'ebay add multi-buy discounts':                          [0,    7],
-  'add shopify multi-buy discounts':                       [0,    7],
-  'announce launch on social media':                       [0,    7],
-  'amazon launch':                                         [0,    7],
-  'add to marketing kpi tracker':                          [0,    0],
-  'enrol in vine (if using)':                              [0,    7],
-  'create coupon':                                         [0,    7],
-  'add to rank radar':                                     [1,    7],
-  'add cost price into sellerboard.io':                    [1,    1],
-  'enter cogs into sellerboard':                           [1,    7],
-  'add asin to storefront':                                [1,    7],
-  'sub task - add asin to home page':                      [1,    7],  // sub-subtask
-  'sub task - add asin to category page':                  [1,    7],  // sub-subtask
-  'weekly review price':                                   [7,    1],
-  'add campaigns to scale insights automation':            [10,   1],
-  'negative keyword check':                                [10,   1],
-  'check review request automation (captaina)':            [10,   1],
-  'analyse reviews for listing improvements (60 days)':    [14,   1],
-  'analyse reviews for listing improvements (90 days)':    [28,   1],
-  're-order eligibility (60 days)':                        [60,   7],
-  're-order eligibility (90 days)':                        [90,   7],
+  'create mkl':                                            [-90, 42],  // H14 + I28
+  'create listing data':                                   [-90, 42],  // H14 + I28
+  'research/setup ppc campaigns':                          [-90, 42],  // H14 + I28
+  'create sp campaigns':                                   [-90, 42],  // H14 + I28  sub-subtask
+  'add to branded search campaign':                        [-90, 42],  // H14 + I28  sub-subtask
+  'create negative keyword list':                          [-90, 42],  // H14 + I28  sub-subtask
+  'update/add negative master keyword list':               [-90, 42],  // H14 + I28  sub-subtask
+  'add pts as negative product targets':                   [-90, 42],  // H14 + I28  sub-subtask
+  'review listing':                                        [-81, 42],  // H14 + I28
+  'listing amends':                                        [-81, 21],  // H7  + I14
+  'approve listing':                                       [-74, 21],  // H7  + I14
+  'complete ih launch template':                           [-60, 21],  // H7  + I14
+  'import & list products on ih channels':                 [-60, 21],  // H7  + I14
+  'create flat file template':                             [-60, 21],  // H7  + I14
+  'sub task - add b2b pricing':                            [-60, 21],  // H7  + I14  sub-subtask
+  'sub task - set max order quantity to 20':               [-60, 21],  // H7  + I14  sub-subtask
+  'sub task upload to amazon / close listing':             [-60, 21],  // H7  + I14  sub-subtask
+  'sostocked sku setup':                                   [-59,  4],  // H2  + I2
+  'create/save sds (fast track)':                          [-59, 16],  // H2  + I14
+  'review/approve fast track sds completed.':              [-59, 16],  // H2  + I14
+  'complete pcm entry':                                    [-59, 16],  // H2  + I14
+  'upload sds':                                            [-58, 28],  // H7  + I21
+  'send test shipment':                                    [-57,  3],  // H2  + I1
+  'inventory - ship inventory to amazon uk':               [-21,  3],  // H2  + I1
+  'inventory - ship inventory to amazon eu':               [-21,  3],  // H2  + I1
+  'add images to listing':                                 [-14, 21],  // H7  + I14
+  'launch email campaign':                                 [-11,  3],  // H1  + I2
+  'ebay promoted listing setup':                           [0,   14],  // H7  + I7
+  'ebay add multi-buy discounts':                          [0,   14],  // H7  + I7
+  'add shopify multi-buy discounts':                       [0,   14],  // H7  + I7
+  'announce launch on social media':                       [0,   14],  // H7  + I7
+  'amazon launch':                                         [0,   14],  // H7  + I7
+  'add to marketing kpi tracker':                          [0,    0],  // H0  + I0
+  'enrol in vine (if using)':                              [0,   14],  // H7  + I7
+  'create coupon':                                         [0,   14],  // H7  + I7
+  'add to rank radar':                                     [1,   14],  // H7  + I7
+  'add cost price into sellerboard.io':                    [1,    2],  // H1  + I1
+  'enter cogs into sellerboard':                           [1,   14],  // H7  + I7
+  'add asin to storefront':                                [1,   14],  // H7  + I7
+  'sub task - add asin to home page':                      [1,   14],  // H7  + I7  sub-subtask
+  'sub task - add asin to category page':                  [1,   14],  // H7  + I7  sub-subtask
+  'weekly review price':                                   [7,    8],  // H1  + I7
+  'add campaigns to scale insights automation':            [10,   8],  // H1  + I7
+  'negative keyword check':                                [10,   8],  // H1  + I7
+  'check review request automation (captaina)':            [10,   8],  // H1  + I7
+  'analyse reviews for listing improvements (60 days)':    [14,   8],  // H1  + I7
+  'analyse reviews for listing improvements (90 days)':    [28,   8],  // H1  + I7
+  're-order eligibility (60 days)':                        [60,   8],  // H7  + I1
+  're-order eligibility (90 days)':                        [90,   8],  // H7  + I1
 };
 
 // Subtasks that have their own children to process
