@@ -213,7 +213,11 @@ interface CuTask {
   tags: { name: string }[];
 }
 
-async function cuFetch(path: string, opts: RequestInit = {}): Promise<unknown> {
+async function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function cuFetch(path: string, opts: RequestInit = {}, retries = 5): Promise<unknown> {
   const token = process.env.CLICKUP_API_TOKEN;
   if (!token) throw new Error('CLICKUP_API_TOKEN not set');
   const res = await fetch(`${API_BASE}${path}`, {
@@ -224,6 +228,13 @@ async function cuFetch(path: string, opts: RequestInit = {}): Promise<unknown> {
       ...((opts.headers ?? {}) as Record<string, string>),
     },
   });
+  if (res.status === 429 && retries > 0) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10);
+    const waitMs = (isNaN(retryAfter) ? 2 : retryAfter) * 1000;
+    console.log(`  Rate limited — waiting ${waitMs / 1000}s (${retries} retries left)...`);
+    await sleep(waitMs);
+    return cuFetch(path, opts, retries - 1);
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`ClickUp ${opts.method ?? 'GET'} ${path} → ${res.status}: ${text.slice(0, 300)}`);
