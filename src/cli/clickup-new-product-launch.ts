@@ -437,7 +437,7 @@ async function processJob(launchSection: CuTask, parentId: string): Promise<void
 
   if (poMs) {
     console.log(`  Place Purchase Order: ${fmtDate(poMs)}`);
-    lines.push('── From Place Purchase Order ──');
+    lines.push('From Place Purchase Order');
     const r = await applyOffsets(subtasks, poMs, 'PO', FROM_PO, lines);
     totalUpdated += r.updated;
     totalMissing += r.missing;
@@ -445,7 +445,7 @@ async function processJob(launchSection: CuTask, parentId: string): Promise<void
 
   if (completionMs) {
     console.log(`  Completion Date: ${fmtDate(completionMs)}`);
-    lines.push('\n── From Completion Date ──');
+    lines.push('\nFrom Completion Date');
     const r = await applyOffsets(subtasks, completionMs, 'Completion', FROM_COMPLETION, lines);
     totalUpdated += r.updated;
     totalMissing += r.missing;
@@ -453,7 +453,7 @@ async function processJob(launchSection: CuTask, parentId: string): Promise<void
 
   if (launchMs) {
     console.log(`  Launch Date: ${fmtDate(launchMs)}`);
-    lines.push('\n── From Launch Date ──');
+    lines.push('\nFrom Launch Date');
     const r = await applyOffsets(subtasks, launchMs, 'Launch', FROM_LAUNCH, lines);
     totalUpdated += r.updated;
     totalMissing += r.missing;
