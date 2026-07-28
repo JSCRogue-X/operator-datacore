@@ -6,6 +6,35 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 28 July 2026 (session 2)
+
+**ClickUp New Product Launch — assignDays fix + rate limit handling**
+
+- Audited all task offsets against Jon's spreadsheet (columns H = Assign Date, I = Days to Complete, J = Due Date offset)
+- Fixed `assignDays` formula: was set to H only; correct formula is H + I (advance notice + working days to complete)
+- Updated all 3 offset tables — every task now uses the correct total lead time before due date
+- Added `429` rate limit retry to `cuFetch`: reads `Retry-After` header, waits, retries up to 5 times — prevents crash on initial product setup run
+- Added missing July 13th and 14th sessions to ROGUE-LOG-FILE.md (log was only going back to July 15th)
+- Confirmed twice-daily cron-job.org schedule is safe — rate limits only a risk on first run for a new product; retry logic handles it
+
+**Decisions**
+- `assignDays = assignDate (H) + daysToComplete (I)` is the correct formula going forward
+- Twice-daily schedule (6am and 1pm) via cron-job.org is fine — routine runs only action a handful of tasks
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — assignDays fix across all 3 offset tables + 429 retry logic
+
+**Commits**
+- `0248152` — fix(clickup): correct assignDays to use assign date + days to complete
+- `e073903` — fix(clickup): retry on 429 rate limit with Retry-After backoff
+
+**Next steps**
+- Remove assignees from initial script (dates only on first run)
+- Confirm reopen status with Paul, then build Weekly Review Price recurring task feature
+- Swap ASSIGNEES table to production user IDs when ready to go live
+
+---
+
 ### 28 July 2026
 
 **Project housekeeping — todo, context, and session summary command**
