@@ -6,6 +6,37 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 29 July 2026 (session 2)
+
+**ClickUp New Product Launch — fix sub-subtask recursion (going live tomorrow)**
+
+- Script ran; MISSING log revealed all 10 unmatched tasks are nested sub-subtasks (not direct children of "6. Launch"):
+  - 5 PPC tasks — children of "Research/Setup PPC Campaigns"
+  - 3 flat file sub tasks — children of "Create flat file template"
+  - 2 storefront sub tasks — children of "Add ASIN to storefront"
+- Root cause: `applyOffsets` only recursed into `HAS_SUB_SUBTASKS` parents in the "SET dates" path — not in the `isComplete` or `SKIP (dates already set)` branches
+- Fix: added `HAS_SUB_SUBTASKS` recursion check to both branches; all 10 tasks will now be found and processed on next run
+- Going live 30 July 2026 — Jon to provide live ClickUp space/list and production assignee names tomorrow morning
+- Recurring task (Weekly Review Price) will be handled manually in ClickUp — no automation needed
+
+**Decisions**
+- Sub-subtask recursion is now consistent across all branches — isComplete, ADD START, SKIP, and SET all recurse when the parent is in `HAS_SUB_SUBTASKS`
+- Recurring task feature dropped from to-do — ops team will set recurrence in ClickUp directly
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — recurse into sub-subtask parents from isComplete and SKIP branches
+
+**Commits**
+- `ae70f6a` — Fix: recurse into sub-subtask parents even when parent is complete or dates set
+
+**Next steps**
+- Tomorrow: Jon to provide live ClickUp space and production assignee names
+- Swap `ASSIGNEES` table to production user IDs
+- Point automation at live list (if different from current test space)
+- Add `new-product` tag to first live job
+
+---
+
 ### 29 July 2026
 
 **ClickUp New Product Launch — missing task name logging**
