@@ -6,6 +6,28 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 29 July 2026
+
+**ClickUp New Product Launch — missing task name logging**
+
+- Script ran at 6:01am via cron-job.org — reported "10 subtask(s) not found"
+- Root cause: task names in ClickUp template don't exactly match keys in the offset table
+- Fix: updated `applyOffsets` to log each missing task name individually (`MISSING: "task name"`) instead of just a count — next run will show the exact names to fix
+- Also noted: Place Purchase Order and Completion Date sections produced nothing — anchor dates not yet set in Section 5 of this job
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — log each missing task name
+
+**Commits**
+- `f029975` — fix(clickup): log each missing task name instead of just a count
+
+**Next steps**
+- Run script again (or trigger via cron-job.org) to see exact missing task names in GitHub Actions log
+- Compare MISSING names against ClickUp template and fix mismatches (either rename tasks in ClickUp or update code keys)
+- Set Place Purchase Order and Completion Date anchor dates in Section 5 of the job
+
+---
+
 ### 28 July 2026 (session 2)
 
 **ClickUp New Product Launch — assignDays fix + rate limit handling**
