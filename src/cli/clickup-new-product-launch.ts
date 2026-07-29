@@ -341,6 +341,13 @@ async function applyOffsets(
       || statusName === 'complete' || statusName === 'completed' || statusName === 'done';
     if (isComplete) {
       console.log(`  SKIP (completed): "${task.name}"`);
+      if (HAS_SUB_SUBTASKS.has(nameLower)) {
+        const children = await getSubtasks(task.id);
+        if (children.length) {
+          const r = await applyOffsets(children, anchorMs, anchorLabel, offsets, lines);
+          updated += r.updated; missing += r.missing;
+        }
+      }
       continue;
     }
     const assigneeIds = TEST_ASSIGNEE_ID !== null
@@ -376,6 +383,13 @@ async function applyOffsets(
         console.log(`  ASSIGN (overdue/due): "${task.name}"`);
       } else {
         console.log(`  SKIP (dates already set): "${task.name}"`);
+        if (HAS_SUB_SUBTASKS.has(nameLower)) {
+          const children = await getSubtasks(task.id);
+          if (children.length) {
+            const r = await applyOffsets(children, anchorMs, anchorLabel, offsets, lines);
+            updated += r.updated; missing += r.missing;
+          }
+        }
       }
       continue;
     }
