@@ -334,7 +334,7 @@ async function applyOffsets(
 
   for (const [nameLower, [offset, assignDays]] of Object.entries(offsets)) {
     const task = byName.get(nameLower);
-    if (!task) { missing++; continue; }
+    if (!task) { console.log(`  MISSING: "${nameLower}"`); missing++; continue; }
     const statusType = task.status?.type ?? '';
     const statusName = (task.status?.status ?? '').toLowerCase();
     const isComplete = statusType === 'closed' || statusType === 'done'
