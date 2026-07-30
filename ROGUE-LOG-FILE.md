@@ -6,6 +6,35 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 30 July 2026
+
+**ClickUp New Product Launch — gone live**
+
+- Swapped ASSIGNEES table to production user IDs: Will Murphy (32554033), Anthony Taylor (32547067), Laura Haygarth-Borland (93868392), Paul Atkinson (87803456)
+- Multi-assignee tasks correctly set: Review Listing, Approve Listing (Anthony + Laura); Complete IH Launch Template (Laura + Will); Re-order eligibility (Anthony + Paul + Laura)
+- Inventory - Ship Inventory to Amazon EU confirmed as Paul Atkinson (same as UK)
+- Template confirmed: "New Product Template" in R&D space — duplicate and add `new-product` tag to "6. Launch" to activate automation
+
+**AGL Delivery Date Sync — CF 2026-13 US investigation**
+
+- CF 2026-13 US has `cf-agl` tag and correct subtask structure (Delivery Date, Make Final Payment, etc.) — ClickUp side is fine
+- Script did not assign dates because it only queries UK + EU Amazon marketplaces — if this is an FBA USA shipment, it needs the North America SP-API endpoint (region: 'na', marketplace ATVPDKIKX0DC)
+- Awaiting confirmation from Jon whether CF 2026-13 US is going to Amazon FBA USA
+
+**Decisions**
+- Recurring task (Weekly Review Price) will be handled manually in ClickUp — automation feature dropped
+
+**Files changed**
+- `src/cli/clickup-new-product-launch.ts` — production ASSIGNEES table
+
+**Commits**
+- `2821956` — feat(clickup): swap ASSIGNEES to production user IDs
+
+**Next steps**
+- Jon to confirm CF 2026-13 US destination — if FBA USA, add North America SP-API endpoint to AGL sync script
+
+---
+
 ### 29 July 2026 (session 2)
 
 **ClickUp New Product Launch — fix sub-subtask recursion (going live tomorrow)**
