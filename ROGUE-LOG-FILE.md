@@ -6,6 +6,22 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 30 July 2026 (session 2)
+
+**AGL Delivery Date Sync — new task added**
+
+- Added "Close SoStocked PO's" to `FROM_DELIVERY` offset table at +4 days (same as Update Unit Pricing (AGL))
+- Assigned to Jon Scoulding in ClickUp
+- Will cascade automatically whenever a Delivery Date is set on any AGL task
+
+**Files changed**
+- `src/cli/clickup-agl-sync-delivery.ts` — added Close SoStocked PO's at +4 days
+
+**Commits**
+- `800d352` — feat(agl): add Close SoStocked PO's at Delivery +4 days
+
+---
+
 ### 30 July 2026
 
 **ClickUp New Product Launch — gone live**
