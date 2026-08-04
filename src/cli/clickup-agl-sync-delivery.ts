@@ -25,6 +25,7 @@ const FROM_DELIVERY: Record<string, number> = {
   'provide final costings':    -14,
   'review import duties':        4,
   'update unit pricing (agl)':   4,
+  'close sostocked po\'s':       4,
 };
 
 // ── Types ────────────────────────────────────────────────────────────────────
