@@ -83,6 +83,41 @@ async function main() {
 
   console.log('\n=== All top-level field names on first order ===');
   console.log(Object.keys(firstOrder).join(', '));
+
+  // ── Open (not yet dispatched) orders ────────────────────────────────────
+  console.log('\n\nOpen orders check (OpenOrders/GetOpenOrders)');
+  console.log('----------------------------------------------------------');
+
+  const openResp = await fetch(`${session.server}/api/OpenOrders/GetOpenOrders`, {
+    method:  'POST',
+    headers: { Authorization: session.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ViewId:         0,
+      LocationId:     '00000000-0000-0000-0000-000000000000',
+      EntriesPerPage: 20,
+      PageNumber:     1,
+      OrderIds:       [],
+    }),
+  });
+
+  if (!openResp.ok) {
+    console.log(`GetOpenOrders failed: ${openResp.status} ${await openResp.text()}`);
+    return;
+  }
+
+  const openRaw  = await openResp.json() as Record<string, unknown>;
+  const openData = (openRaw['Data'] ?? []) as Record<string, unknown>[];
+
+  console.log(`TotalEntries: ${openRaw['TotalEntries']}`);
+  console.log(`Open orders returned this page: ${openData.length}`);
+
+  if (openData.length === 0) {
+    console.log('No open orders right now — nothing to inspect.');
+    return;
+  }
+
+  console.log('\n=== Full raw JSON of first open order ===');
+  console.log(JSON.stringify(openData[0], null, 2));
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
