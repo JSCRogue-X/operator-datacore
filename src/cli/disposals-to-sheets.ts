@@ -239,21 +239,19 @@ async function main() {
   // then write Combined / UK / EU totals to the matching row in Yearly Data.
   console.log('\nUpdating Yearly Data tab...');
 
-  // Load unit costs from Cost tab: col C (idx 0) = ASIN, col H (idx 5) = ASIN alt, col I (idx 6) = FBA UK Landed Cost
+  // Load unit costs from Cost tab using same range as Dashboard VLOOKUP: Cost!H:I
+  // col H (idx 0) = ASIN, col I (idx 1) = FBA UK Landed Cost
   const costResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${COST_TAB}!C2:I`,
+    range: `${COST_TAB}!H2:I`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const costRows = costResp.data.values ?? [];
-  const costMap = new Map<string, number>(); // keyed on ASIN
+  const costMap = new Map<string, number>(); // keyed on ASIN (col H)
   for (const cr of costRows) {
-    const asin1 = String(cr[0] ?? '').trim();  // col C
-    const asin2 = String(cr[5] ?? '').trim();  // col H
-    const cost  = typeof cr[6] === 'number' ? cr[6] : parseFloat(String(cr[6] ?? '')); // col I
-    if (isNaN(cost) || cost <= 0) continue;
-    if (asin1 && !costMap.has(asin1)) costMap.set(asin1, cost);
-    if (asin2 && !costMap.has(asin2)) costMap.set(asin2, cost);
+    const asin = String(cr[0] ?? '').trim();  // col H
+    const cost = typeof cr[1] === 'number' ? cr[1] : parseFloat(String(cr[1] ?? '')); // col I
+    if (asin && !isNaN(cost) && cost > 0 && !costMap.has(asin)) costMap.set(asin, cost);
   }
   console.log(`  ${costMap.size} ASIN costs loaded from "${COST_TAB}" tab.`);
 
