@@ -239,26 +239,23 @@ async function main() {
   // then write Combined / UK / EU totals to the matching row in Yearly Data.
   console.log('\nUpdating Yearly Data tab...');
 
-  // Load unit costs from Cost tab
-  // Read D:I — col D (idx 0) = FBA SKU, col G (idx 3) = SKU, col I (idx 5) = FBA UK Landed Cost
-  // Build one map keyed on FBA SKU and a fallback map keyed on SKU
+  // Load unit costs from Cost tab: col C (idx 0) = ASIN, col H (idx 5) = ASIN alt, col I (idx 6) = FBA UK Landed Cost
   const costResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${COST_TAB}!D2:I`,
+    range: `${COST_TAB}!C2:I`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const costRows = costResp.data.values ?? [];
-  const costMapFba = new Map<string, number>(); // keyed on col D (FBA SKU)
-  const costMapSku = new Map<string, number>(); // keyed on col G (SKU)
+  const costMap = new Map<string, number>(); // keyed on ASIN
   for (const cr of costRows) {
-    const fbaSku = String(cr[0] ?? '').trim();   // col D
-    const sku    = String(cr[3] ?? '').trim();   // col G
-    const cost   = typeof cr[5] === 'number' ? cr[5] : parseFloat(String(cr[5] ?? '')); // col I
+    const asin1 = String(cr[0] ?? '').trim();  // col C
+    const asin2 = String(cr[5] ?? '').trim();  // col H
+    const cost  = typeof cr[6] === 'number' ? cr[6] : parseFloat(String(cr[6] ?? '')); // col I
     if (isNaN(cost) || cost <= 0) continue;
-    if (fbaSku && !costMapFba.has(fbaSku)) costMapFba.set(fbaSku, cost);
-    if (sku    && !costMapSku.has(sku))    costMapSku.set(sku, cost);
+    if (asin1 && !costMap.has(asin1)) costMap.set(asin1, cost);
+    if (asin2 && !costMap.has(asin2)) costMap.set(asin2, cost);
   }
-  console.log(`  ${costMapFba.size} FBA SKU / ${costMapSku.size} SKU costs loaded from "${COST_TAB}" tab.`);
+  console.log(`  ${costMap.size} ASIN costs loaded from "${COST_TAB}" tab.`);
 
   const allDataResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -274,12 +271,12 @@ async function main() {
     const dateSerial  = typeof row[0] === 'number' ? row[0] : parseFloat(String(row[0] ?? ''));
     const currency    = String(row[8] ?? '').trim().toUpperCase();   // col I
     const costStatic  = typeof row[15] === 'number' ? row[15] : parseFloat(String(row[15] ?? '')); // col P (removal fee GBP)
-    const sku         = String(row[3] ?? '').trim();                                                // col D
+    const asin        = String(row[4] ?? '').trim();                                                // col E
     const disposedQty = typeof row[6] === 'number' ? row[6] : parseFloat(String(row[6] ?? ''));   // col G
 
     if (isNaN(dateSerial)) continue;
 
-    const unitCost      = costMapFba.get(sku) ?? costMapSku.get(sku) ?? 0;
+    const unitCost      = costMap.get(asin) ?? 0;
     const itemCostValue = !isNaN(disposedQty) ? unitCost * disposedQty : 0;
     const totalCost     = (isNaN(costStatic) ? 0 : costStatic) + itemCostValue;
     if (totalCost === 0) continue;
