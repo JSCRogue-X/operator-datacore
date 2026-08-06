@@ -4,8 +4,10 @@
 // (columns A-G) in the Company Sell-through / Overall tracking sheet.
 // Still-open orders get a placeholder ProcessedDate (received + 24h) so the
 // sheet's own SLA formulas don't flag them as overdue while they wait for
-// the next dispatch run. Correcting that placeholder once the order is
-// actually dispatched is a follow-up step, not handled by this version.
+// the next dispatch run.
+// Also reconciles the last few weeks of existing rows against Linnworks'
+// real dispatch records, correcting any placeholder ProcessedDate to the
+// real one once the order has actually gone out.
 // Run: npx tsx src/cli/linnworks-weekly-orders-to-linn.ts
 
 import 'dotenv/config';
@@ -18,6 +20,8 @@ const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ??
 const TAB_NAME = 'Linn';
 
 const ALLOWED_SUBSOURCES = new Set(['SPIN CARE', 'EBAY1']);
+const RECONCILE_WINDOW_DAYS = 21; // how far back to re-check for placeholder dates needing correction
+const RECONCILE_TOLERANCE_DAYS = 1 / 1440; // ~1 minute, in Sheets serial-day units — treat smaller diffs as "already correct"
 
 // Google Sheets date serial: days (with fractional time-of-day) since 30 Dec 1899
 const SHEETS_EPOCH = Date.UTC(1899, 11, 30);
@@ -252,52 +256,94 @@ async function main() {
 
   if (newRows.length === 0) {
     console.log('  Nothing new to add.');
-    return;
+  } else {
+    const outputRows = newRows.map(o => [
+      o.nOrderId,
+      o.channelReference,
+      toSheetDateTime(o.receivedDate),
+      o.country,
+      toSheetDateTime(o.processedDate!),
+      o.source,
+      o.subSource,
+    ]);
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId:    SPREADSHEET_ID,
+      range:            `${TAB_NAME}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody:      { values: outputRows },
+    });
+
+    const firstNewRow = existingRows.length + 1;
+    const lastNewRow  = firstNewRow + outputRows.length - 1;
+
+    // Match the existing date-time display style in columns C (received) and E (processed)
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [2, 4].map(colIndex => ({
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex:    firstNewRow - 1,
+              endRowIndex:      lastNewRow,
+              startColumnIndex: colIndex,
+              endColumnIndex:   colIndex + 1,
+            },
+            cell:   { userEnteredFormat: { numberFormat: { type: 'DATE_TIME', pattern: 'd/mm/yyyy hh:mm' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        })),
+      },
+    });
+
+    console.log(`  Done — ${outputRows.length} row(s) appended to "${TAB_NAME}".`);
   }
 
-  const outputRows = newRows.map(o => [
-    o.nOrderId,
-    o.channelReference,
-    toSheetDateTime(o.receivedDate),
-    o.country,
-    toSheetDateTime(o.processedDate!),
-    o.source,
-    o.subSource,
-  ]);
+  // ── Reconciliation: correct any earlier placeholder ProcessedDate now that ──
+  // ── Linnworks shows the order as genuinely dispatched ────────────────────
+  console.log(`\nReconciling the last ${RECONCILE_WINDOW_DAYS} days against real dispatch dates...`);
+  const reconcileFrom = new Date(now.getTime() - RECONCILE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const reconcileDispatched = await fetchDispatchedOrders(session, reconcileFrom, now);
+  console.log(`  ${reconcileDispatched.length} dispatched order(s) in that window to check.`);
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId:    SPREADSHEET_ID,
-    range:            `${TAB_NAME}!A1`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody:      { values: outputRows },
-  });
-
-  const firstNewRow = existingRows.length + 1;
-  const lastNewRow  = firstNewRow + outputRows.length - 1;
-
-  // Match the existing date-time display style in columns C (received) and E (processed)
-  await sheets.spreadsheets.batchUpdate({
+  const idColResp   = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${TAB_NAME}!A:A` });
+  const dateColResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    requestBody: {
-      requests: [2, 4].map(colIndex => ({
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex:    firstNewRow - 1,
-            endRowIndex:      lastNewRow,
-            startColumnIndex: colIndex,
-            endColumnIndex:   colIndex + 1,
-          },
-          cell:   { userEnteredFormat: { numberFormat: { type: 'DATE_TIME', pattern: 'd/mm/yyyy hh:mm' } } },
-          fields: 'userEnteredFormat.numberFormat',
-        },
-      })),
-    },
+    range: `${TAB_NAME}!E:E`,
+    valueRenderOption: 'UNFORMATTED_VALUE',
   });
+  const idRows   = idColResp.data.values ?? [];
+  const dateRows = dateColResp.data.values ?? [];
 
-  console.log(`\nDone — ${outputRows.length} row(s) appended to "${TAB_NAME}".`);
-  console.log(`View: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
+  const rowByOrderId = new Map<string, number>(); // nOrderId -> 1-indexed sheet row
+  for (let i = 1; i < idRows.length; i++) {
+    const id = String(idRows[i]?.[0] ?? '').trim();
+    if (id) rowByOrderId.set(id, i + 1);
+  }
+
+  let corrected = 0;
+  for (const o of reconcileDispatched) {
+    if (!o.processedDate) continue;
+    const rowNum = rowByOrderId.get(String(o.nOrderId));
+    if (!rowNum) continue; // not in the sheet yet — the append step above handles new rows
+
+    const currentSerial = Number(dateRows[rowNum - 1]?.[0]);
+    const realSerial    = toSheetDateTime(o.processedDate);
+    if (!isNaN(currentSerial) && Math.abs(currentSerial - realSerial) < RECONCILE_TOLERANCE_DAYS) continue;
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId:    SPREADSHEET_ID,
+      range:            `${TAB_NAME}!E${rowNum}`,
+      valueInputOption: 'RAW',
+      requestBody:      { values: [[realSerial]] },
+    });
+    corrected++;
+  }
+  console.log(`  ${corrected} row(s) corrected with a real dispatch date.`);
+
+  console.log(`\nView: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
