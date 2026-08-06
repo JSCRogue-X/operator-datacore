@@ -46,7 +46,7 @@ async function main() {
         fromDate:       fromDate.toISOString(),
         toDate:         toDate.toISOString(),
         pageNumber:     1,
-        resultsPerPage: 5,
+        resultsPerPage: 20,
       },
     }),
   });
