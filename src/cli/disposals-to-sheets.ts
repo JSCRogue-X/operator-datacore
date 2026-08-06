@@ -239,22 +239,26 @@ async function main() {
   // then write Combined / UK / EU totals to the matching row in Yearly Data.
   console.log('\nUpdating Yearly Data tab...');
 
-  // Load unit costs from Cost tab (col G = SKU, col I = FBA UK Landed Cost)
+  // Load unit costs from Cost tab
+  // Read D:I — col D (idx 0) = FBA SKU, col G (idx 3) = SKU, col I (idx 5) = FBA UK Landed Cost
+  // Build one map keyed on FBA SKU and a fallback map keyed on SKU
   const costResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${COST_TAB}!G2:I`,
+    range: `${COST_TAB}!D2:I`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const costRows = costResp.data.values ?? [];
-  const costMap = new Map<string, number>();
+  const costMapFba = new Map<string, number>(); // keyed on col D (FBA SKU)
+  const costMapSku = new Map<string, number>(); // keyed on col G (SKU)
   for (const cr of costRows) {
-    const sku  = String(cr[0] ?? '').trim();
-    const cost = typeof cr[2] === 'number' ? cr[2] : parseFloat(String(cr[2] ?? ''));
-    if (sku && !isNaN(cost) && cost > 0 && !costMap.has(sku)) {
-      costMap.set(sku, cost);
-    }
+    const fbaSku = String(cr[0] ?? '').trim();   // col D
+    const sku    = String(cr[3] ?? '').trim();   // col G
+    const cost   = typeof cr[5] === 'number' ? cr[5] : parseFloat(String(cr[5] ?? '')); // col I
+    if (isNaN(cost) || cost <= 0) continue;
+    if (fbaSku && !costMapFba.has(fbaSku)) costMapFba.set(fbaSku, cost);
+    if (sku    && !costMapSku.has(sku))    costMapSku.set(sku, cost);
   }
-  console.log(`  ${costMap.size} unit cost(s) loaded from "${COST_TAB}" tab.`);
+  console.log(`  ${costMapFba.size} FBA SKU / ${costMapSku.size} SKU costs loaded from "${COST_TAB}" tab.`);
 
   const allDataResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -275,7 +279,7 @@ async function main() {
 
     if (isNaN(dateSerial)) continue;
 
-    const unitCost      = costMap.get(sku) ?? 0;
+    const unitCost      = costMapFba.get(sku) ?? costMapSku.get(sku) ?? 0;
     const itemCostValue = !isNaN(disposedQty) ? unitCost * disposedQty : 0;
     const totalCost     = (isNaN(costStatic) ? 0 : costStatic) + itemCostValue;
     if (totalCost === 0) continue;
