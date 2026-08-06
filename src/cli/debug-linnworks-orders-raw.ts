@@ -88,12 +88,34 @@ async function main() {
   console.log('\n\nOpen orders check (OpenOrders/GetOpenOrders)');
   console.log('----------------------------------------------------------');
 
+  // Resolve the Ogden Fulfilment location GUID (same pattern as linnworks_oos.py —
+  // GetOpenOrders needs a real location GUID, not the all-zero "default" one).
+  const locResp = await fetch(`${session.server}/api/Inventory/GetStockLocations`, {
+    method:  'GET',
+    headers: { Authorization: session.token },
+  });
+  if (!locResp.ok) {
+    console.log(`GetStockLocations failed: ${locResp.status} ${await locResp.text()}`);
+    return;
+  }
+  const locRaw  = await locResp.json() as unknown;
+  const locList = (Array.isArray(locRaw) ? locRaw : (locRaw as Record<string, unknown>)['Data']) as Record<string, unknown>[] ?? [];
+  const ogden   = locList.find(l => String(l['LocationName'] ?? l['Name'] ?? '').toLowerCase().includes('ogden'));
+
+  if (!ogden) {
+    console.log('Could not find an "Ogden" location. All locations returned:');
+    console.log(JSON.stringify(locList, null, 2));
+    return;
+  }
+  const ogdenLocationId = String(ogden['StockLocationId'] ?? ogden['Id'] ?? '');
+  console.log(`Resolved Ogden Fulfilment location GUID: ${ogdenLocationId}`);
+
   const openResp = await fetch(`${session.server}/api/OpenOrders/GetOpenOrders`, {
     method:  'POST',
     headers: { Authorization: session.token, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ViewId:         0,
-      LocationId:     '00000000-0000-0000-0000-000000000000',
+      LocationId:     ogdenLocationId,
       EntriesPerPage: 20,
       PageNumber:     1,
       OrderIds:       [],
