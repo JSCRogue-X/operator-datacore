@@ -21,7 +21,7 @@ const TAB_NAME = 'Linn';
 
 const ALLOWED_SUBSOURCES = new Set(['SPIN CARE', 'EBAY1']);
 const RECONCILE_WINDOW_DAYS = 21; // how far back to re-check for placeholder dates needing correction
-const RECONCILE_TOLERANCE_DAYS = 1 / 1440; // ~1 minute, in Sheets serial-day units — treat smaller diffs as "already correct"
+const RECONCILE_TOLERANCE_DAYS = 10 / 1440; // ~10 minutes, in Sheets serial-day units — a genuine placeholder mismatch is hours/days off, so this comfortably ignores minor seconds-level rounding in older manually-entered rows without masking real corrections
 
 // Google Sheets date serial: days (with fractional time-of-day) since 30 Dec 1899
 const SHEETS_EPOCH = Date.UTC(1899, 11, 30);
@@ -323,7 +323,7 @@ async function main() {
     if (id) rowByOrderId.set(id, i + 1);
   }
 
-  let corrected = 0;
+  const corrections: { range: string; values: number[][] }[] = [];
   for (const o of reconcileDispatched) {
     if (!o.processedDate) continue;
     const rowNum = rowByOrderId.get(String(o.nOrderId));
@@ -333,15 +333,18 @@ async function main() {
     const realSerial    = toSheetDateTime(o.processedDate);
     if (!isNaN(currentSerial) && Math.abs(currentSerial - realSerial) < RECONCILE_TOLERANCE_DAYS) continue;
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId:    SPREADSHEET_ID,
-      range:            `${TAB_NAME}!E${rowNum}`,
-      valueInputOption: 'RAW',
-      requestBody:      { values: [[realSerial]] },
-    });
-    corrected++;
+    corrections.push({ range: `${TAB_NAME}!E${rowNum}`, values: [[realSerial]] });
   }
-  console.log(`  ${corrected} row(s) corrected with a real dispatch date.`);
+
+  if (corrections.length > 0) {
+    // One batched request rather than one write per row — avoids the Sheets API's
+    // per-minute write-request quota when many rows need correcting at once.
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody:   { valueInputOption: 'RAW', data: corrections },
+    });
+  }
+  console.log(`  ${corrections.length} row(s) corrected with a real dispatch date.`);
 
   console.log(`\nView: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
