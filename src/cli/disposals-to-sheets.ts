@@ -16,6 +16,7 @@ const SPREADSHEET_ID = '1GC9MZxpMhmhw8QGi8-dAhXsruwbBhpsQEaWR9RLdMZE';
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
 const TAB_NAME    = 'Disposals Data';
 const YEARLY_TAB  = 'Yearly Data';
+const COST_TAB    = 'Cost';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -238,6 +239,23 @@ async function main() {
   // then write Combined / UK / EU totals to the matching row in Yearly Data.
   console.log('\nUpdating Yearly Data tab...');
 
+  // Load unit costs from Cost tab (col G = SKU, col I = FBA UK Landed Cost)
+  const costResp = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${COST_TAB}!G2:I`,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const costRows = costResp.data.values ?? [];
+  const costMap = new Map<string, number>();
+  for (const cr of costRows) {
+    const sku  = String(cr[0] ?? '').trim();
+    const cost = typeof cr[2] === 'number' ? cr[2] : parseFloat(String(cr[2] ?? ''));
+    if (sku && !isNaN(cost) && cost > 0 && !costMap.has(sku)) {
+      costMap.set(sku, cost);
+    }
+  }
+  console.log(`  ${costMap.size} unit cost(s) loaded from "${COST_TAB}" tab.`);
+
   const allDataResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${TAB_NAME}!A2:P`,
@@ -246,13 +264,21 @@ async function main() {
   const allDataRows = allDataResp.data.values ?? [];
 
   // Aggregate: key = "YYYY-M" (0-indexed month), value = { uk, eu }
+  // Total cost per row = removal fee (col P) + (unit cost from Cost tab × disposed qty (col G))
   const monthTotals = new Map<string, { uk: number; eu: number }>();
   for (const row of allDataRows) {
     const dateSerial  = typeof row[0] === 'number' ? row[0] : parseFloat(String(row[0] ?? ''));
     const currency    = String(row[8] ?? '').trim().toUpperCase();   // col I
-    const costStatic  = typeof row[15] === 'number' ? row[15] : parseFloat(String(row[15] ?? '')); // col P
+    const costStatic  = typeof row[15] === 'number' ? row[15] : parseFloat(String(row[15] ?? '')); // col P (removal fee GBP)
+    const sku         = String(row[3] ?? '').trim();                                                // col D
+    const disposedQty = typeof row[6] === 'number' ? row[6] : parseFloat(String(row[6] ?? ''));   // col G
 
-    if (isNaN(dateSerial) || !costStatic) continue;
+    if (isNaN(dateSerial)) continue;
+
+    const unitCost      = costMap.get(sku) ?? 0;
+    const itemCostValue = !isNaN(disposedQty) ? unitCost * disposedQty : 0;
+    const totalCost     = (isNaN(costStatic) ? 0 : costStatic) + itemCostValue;
+    if (totalCost === 0) continue;
 
     const dateMs = SHEETS_EPOCH + dateSerial * 86400000;
     const d      = new Date(dateMs);
@@ -260,8 +286,8 @@ async function main() {
 
     if (!monthTotals.has(key)) monthTotals.set(key, { uk: 0, eu: 0 });
     const entry = monthTotals.get(key)!;
-    if (currency === 'GBP') entry.uk += costStatic;
-    else                    entry.eu += costStatic;
+    if (currency === 'GBP') entry.uk += totalCost;
+    else                    entry.eu += totalCost;
   }
 
   // Read Yearly Data rows (G = Year, H = Month abbreviation)
