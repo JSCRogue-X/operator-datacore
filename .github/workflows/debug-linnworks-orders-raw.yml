@@ -1,0 +1,31 @@
+name: Debug — Linnworks Orders Raw Fields
+
+on:
+  workflow_dispatch:  # Run manually from GitHub Actions
+
+permissions:
+  contents: read
+
+jobs:
+  debug-orders-raw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      LINNWORKS_APP_ID:        ${{ secrets.LINNWORKS_APP_ID }}
+      LINNWORKS_APP_SECRET:    ${{ secrets.LINNWORKS_APP_SECRET }}
+      LINNWORKS_INSTALL_TOKEN: ${{ secrets.LINNWORKS_INSTALL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch and print raw order fields
+        run: npx tsx src/cli/debug-linnworks-orders-raw.ts
