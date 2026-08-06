@@ -297,27 +297,45 @@ async function main() {
   });
   const yearlyRows = yearlyResp.data.values ?? [];
 
-  let yearlyUpdated = 0;
-  for (let i = 0; i < yearlyRows.length; i++) {
-    const r        = yearlyRows[i];
-    const year     = parseInt(String(r?.[0] ?? ''), 10);
-    const monthStr = String(r?.[1] ?? '').trim();
-    const monthIdx = MONTH_NAMES.indexOf(monthStr);
-    if (isNaN(year) || monthIdx === -1) continue;
-
-    const totals = monthTotals.get(`${year}-${monthIdx}`);
-    if (!totals) continue;
-
-    const sheetRow = i + 2; // G2 = row 2 in the sheet, so i=0 → row 2
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${YEARLY_TAB}!J${sheetRow}:L${sheetRow}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [[round2(totals.uk + totals.eu), round2(totals.uk), round2(totals.eu)]] },
-    });
-    yearlyUpdated++;
+  // Only touch the most recent month present in the data — recalculating every
+  // historical month on each run means a later Cost tab update silently re-prices
+  // (and overwrites) prior months that should stay as originally recorded.
+  let latestKey = '';
+  let latestYear = -Infinity;
+  let latestMonthIdx = -1;
+  for (const key of monthTotals.keys()) {
+    const [yStr, mStr] = key.split('-');
+    const y = parseInt(yStr, 10);
+    const m = parseInt(mStr, 10);
+    if (y > latestYear || (y === latestYear && m > latestMonthIdx)) {
+      latestYear = y;
+      latestMonthIdx = m;
+      latestKey = key;
+    }
   }
-  console.log(`  ${yearlyUpdated} month(s) updated in "${YEARLY_TAB}".`);
+
+  let yearlyUpdated = 0;
+  if (latestKey) {
+    const totals = monthTotals.get(latestKey)!;
+    for (let i = 0; i < yearlyRows.length; i++) {
+      const r        = yearlyRows[i];
+      const year     = parseInt(String(r?.[0] ?? ''), 10);
+      const monthStr = String(r?.[1] ?? '').trim();
+      const monthIdx = MONTH_NAMES.indexOf(monthStr);
+      if (year !== latestYear || monthIdx !== latestMonthIdx) continue;
+
+      const sheetRow = i + 2; // G2 = row 2 in the sheet, so i=0 → row 2
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${YEARLY_TAB}!J${sheetRow}:L${sheetRow}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[round2(totals.uk + totals.eu), round2(totals.uk), round2(totals.eu)]] },
+      });
+      yearlyUpdated++;
+      break;
+    }
+  }
+  console.log(`  ${yearlyUpdated} month(s) updated in "${YEARLY_TAB}"${latestKey ? ` (latest: ${latestKey})` : ''}.`);
 
   console.log(`\nView: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
