@@ -305,8 +305,8 @@ async function main() {
   let latestMonthIdx = -1;
   for (const key of monthTotals.keys()) {
     const [yStr, mStr] = key.split('-');
-    const y = parseInt(yStr, 10);
-    const m = parseInt(mStr, 10);
+    const y = parseInt(yStr ?? '', 10);
+    const m = parseInt(mStr ?? '', 10);
     if (y > latestYear || (y === latestYear && m > latestMonthIdx)) {
       latestYear = y;
       latestMonthIdx = m;
