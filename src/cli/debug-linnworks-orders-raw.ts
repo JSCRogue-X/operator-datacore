@@ -85,7 +85,7 @@ async function main() {
   console.log(Object.keys(firstOrder).join(', '));
 
   // ── Open (not yet dispatched) orders ────────────────────────────────────
-  console.log('\n\nOpen orders check (OpenOrders/GetOpenOrders)');
+  console.log('\n\nOpen orders check (Orders/GetAllOpenOrders + Orders/GetOrderById)');
   console.log('----------------------------------------------------------');
 
   // Resolve the Ogden Fulfilment location GUID (same pattern as linnworks_oos.py —
@@ -110,36 +110,46 @@ async function main() {
   const ogdenLocationId = String(ogden['StockLocationId'] ?? ogden['Id'] ?? '');
   console.log(`Resolved Ogden Fulfilment location GUID: ${ogdenLocationId}`);
 
-  const openResp = await fetch(`${session.server}/api/OpenOrders/GetOpenOrders`, {
+  const allOpenResp = await fetch(`${session.server}/api/Orders/GetAllOpenOrders`, {
     method:  'POST',
     headers: { Authorization: session.token, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      ViewId:         0,
-      LocationId:     ogdenLocationId,
-      EntriesPerPage: 20,
-      PageNumber:     1,
-      OrderIds:       [],
+      filters:          { TextFields: [], BooleanFields: [], NumericFields: [], DateFields: [], ListFields: [] },
+      sorting:          [{ FieldCode: 'GENERAL_INFO_DATE', Direction: 'Descending', Order: 0 }],
+      fulfilmentCenter: ogdenLocationId,
+      additionalFilter: null,
+      exactMatch:       false,
     }),
   });
 
-  if (!openResp.ok) {
-    console.log(`GetOpenOrders failed: ${openResp.status} ${await openResp.text()}`);
+  if (!allOpenResp.ok) {
+    console.log(`GetAllOpenOrders failed: ${allOpenResp.status} ${await allOpenResp.text()}`);
     return;
   }
 
-  const openRaw  = await openResp.json() as Record<string, unknown>;
-  const openData = (openRaw['Data'] ?? []) as Record<string, unknown>[];
+  const openIds = await allOpenResp.json() as string[];
+  console.log(`Open order IDs returned: ${openIds.length}`);
 
-  console.log(`TotalEntries: ${openRaw['TotalEntries']}`);
-  console.log(`Open orders returned this page: ${openData.length}`);
-
-  if (openData.length === 0) {
+  if (openIds.length === 0) {
     console.log('No open orders right now — nothing to inspect.');
     return;
   }
 
-  console.log('\n=== Full raw JSON of first open order ===');
-  console.log(JSON.stringify(openData[0], null, 2));
+  console.log(`\nFetching full details for first open order (${openIds[0]})...`);
+  const orderResp = await fetch(`${session.server}/api/Orders/GetOrderById`, {
+    method:  'POST',
+    headers: { Authorization: session.token, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ pkOrderId: openIds[0] }),
+  });
+
+  if (!orderResp.ok) {
+    console.log(`GetOrderById failed: ${orderResp.status} ${await orderResp.text()}`);
+    return;
+  }
+
+  const orderData = await orderResp.json() as Record<string, unknown>;
+  console.log('\n=== Full raw JSON of first open order (GetOrderById) ===');
+  console.log(JSON.stringify(orderData, null, 2));
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
