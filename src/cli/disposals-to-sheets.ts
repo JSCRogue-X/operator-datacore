@@ -14,7 +14,12 @@ import { runReport, parseTsv } from '../lib/sp-api/reports.js';
 
 const SPREADSHEET_ID = '1GC9MZxpMhmhw8QGi8-dAhXsruwbBhpsQEaWR9RLdMZE';
 const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? 'C:\\Users\\Spincare-JSC\\Documents\\Claude Folder\\spincare-sheets-key.json';
-const TAB_NAME = 'Disposals Data';
+const TAB_NAME    = 'Disposals Data';
+const YEARLY_TAB  = 'Yearly Data';
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function round2(n: number): number { return Math.round(n * 100) / 100; }
 
 const MARKETPLACE_IDS = [
   'A1F83G8C2ARO7P', // GB
@@ -164,69 +169,131 @@ async function main() {
 
   if (newRows.length === 0) {
     console.log('  No new disposals to append — sheet is already up to date.');
-    return;
   }
-  console.log(`  ${newRows.length} new row(s) to append (${outputRows.length - newRows.length} duplicate(s) skipped).`);
+  if (newRows.length > 0) {
+    console.log(`  ${newRows.length} new row(s) to append (${outputRows.length - newRows.length} duplicate(s) skipped).`);
 
-  // Append new rows to A:I
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${TAB_NAME}!A1`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: newRows },
-  });
+    // Append new rows to A:I
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${TAB_NAME}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: newRows },
+    });
 
-  // Row positions for the newly appended data (1-indexed for range strings)
-  const firstNewRow   = existingRows.length + 1; // e.g. if 1074 rows existed, new data starts at 1075
-  const lastNewRow    = firstNewRow + newRows.length - 1;
+    // Row positions for the newly appended data (1-indexed for range strings)
+    const firstNewRow = existingRows.length + 1;
+    const lastNewRow  = firstNewRow + newRows.length - 1;
 
-  // Apply date format to Request Date column (A) for new rows
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
-    requestBody: {
-      requests: [{
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex:    existingRows.length,           // 0-indexed
-            endRowIndex:      existingRows.length + newRows.length,
-            startColumnIndex: 0,
-            endColumnIndex:   1,
+    // Apply date format to Request Date column (A) for new rows
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [{
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex:    existingRows.length,
+              endRowIndex:      existingRows.length + newRows.length,
+              startColumnIndex: 0,
+              endColumnIndex:   1,
+            },
+            cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+            fields: 'userEnteredFormat.numberFormat',
           },
-          cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
-          fields: 'userEnteredFormat.numberFormat',
-        },
-      }],
-    },
-  });
+        }],
+      },
+    });
 
-  // Wait 3 seconds for Sheets to compute the column J formula (EUR>GBP) on the new rows
-  console.log('  Waiting for column J formulas to compute...');
-  await new Promise(r => setTimeout(r, 3000));
+    // Wait 3 seconds for Sheets to compute the column J formula (EUR>GBP) on the new rows
+    console.log('  Waiting for column J formulas to compute...');
+    await new Promise(r => setTimeout(r, 3000));
 
-  // Read computed EUR>GBP values from column J for the new rows
-  const jResp = await sheets.spreadsheets.values.get({
+    // Read computed EUR>GBP values from column J for the new rows
+    const jResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${TAB_NAME}!J${firstNewRow}:J${lastNewRow}`,
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const jData = jResp.data.values ?? [];
+
+    if (jData.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${TAB_NAME}!P${firstNewRow}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: jData },
+      });
+      console.log(`  Column J → P (Cost Static) copied for ${jData.length} row(s).`);
+    } else {
+      console.log('  Warning: column J returned no values — Cost Static not written. Formulas may not have computed yet.');
+    }
+
+    console.log(`  Done — ${newRows.length} new row(s) appended to "${TAB_NAME}".`);
+  }
+
+  // ── Yearly Data rollup ────────────────────────────────────────────────────
+  // Read ALL rows from Disposals Data, aggregate by month+year+currency,
+  // then write Combined / UK / EU totals to the matching row in Yearly Data.
+  console.log('\nUpdating Yearly Data tab...');
+
+  const allDataResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${TAB_NAME}!J${firstNewRow}:J${lastNewRow}`,
+    range: `${TAB_NAME}!A2:P`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
-  const jData = jResp.data.values ?? [];
+  const allDataRows = allDataResp.data.values ?? [];
 
-  if (jData.length > 0) {
-    // Write those values as static numbers into column P (Cost Static)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${TAB_NAME}!P${firstNewRow}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: jData },
-    });
-    console.log(`  Column J → P (Cost Static) copied for ${jData.length} row(s).`);
-  } else {
-    console.log('  Warning: column J returned no values — Cost Static not written. Formulas may not have computed yet.');
+  // Aggregate: key = "YYYY-M" (0-indexed month), value = { uk, eu }
+  const monthTotals = new Map<string, { uk: number; eu: number }>();
+  for (const row of allDataRows) {
+    const dateSerial  = typeof row[0] === 'number' ? row[0] : parseFloat(String(row[0] ?? ''));
+    const currency    = String(row[8] ?? '').trim().toUpperCase();   // col I
+    const costStatic  = typeof row[15] === 'number' ? row[15] : parseFloat(String(row[15] ?? '')); // col P
+
+    if (isNaN(dateSerial) || !costStatic) continue;
+
+    const dateMs = SHEETS_EPOCH + dateSerial * 86400000;
+    const d      = new Date(dateMs);
+    const key    = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+
+    if (!monthTotals.has(key)) monthTotals.set(key, { uk: 0, eu: 0 });
+    const entry = monthTotals.get(key)!;
+    if (currency === 'GBP') entry.uk += costStatic;
+    else                    entry.eu += costStatic;
   }
 
-  console.log(`\n  Done — ${newRows.length} new row(s) appended to "${TAB_NAME}".`);
+  // Read Yearly Data rows (G = Year, H = Month abbreviation)
+  const yearlyResp = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${YEARLY_TAB}!G2:L`,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const yearlyRows = yearlyResp.data.values ?? [];
+
+  let yearlyUpdated = 0;
+  for (let i = 0; i < yearlyRows.length; i++) {
+    const r        = yearlyRows[i];
+    const year     = parseInt(String(r?.[0] ?? ''), 10);
+    const monthStr = String(r?.[1] ?? '').trim();
+    const monthIdx = MONTH_NAMES.indexOf(monthStr);
+    if (isNaN(year) || monthIdx === -1) continue;
+
+    const totals = monthTotals.get(`${year}-${monthIdx}`);
+    if (!totals) continue;
+
+    const sheetRow = i + 2; // G2 = row 2 in the sheet, so i=0 → row 2
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${YEARLY_TAB}!J${sheetRow}:L${sheetRow}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[round2(totals.uk + totals.eu), round2(totals.uk), round2(totals.eu)]] },
+    });
+    yearlyUpdated++;
+  }
+  console.log(`  ${yearlyUpdated} month(s) updated in "${YEARLY_TAB}".`);
+
   console.log(`\nView: https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`);
 }
 
