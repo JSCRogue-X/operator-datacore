@@ -1,0 +1,32 @@
+name: Bank Holidays → Google Sheets
+
+on:
+  workflow_dispatch:  # Run manually from GitHub Actions
+
+permissions:
+  contents: read
+
+jobs:
+  bank-holidays-to-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ./spincare-sheets-key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_JSON }}' > spincare-sheets-key.json
+
+      - name: Bank Holidays → Google Sheets
+        run: npx tsx src/cli/bank-holidays-to-sheets.ts
