@@ -6,6 +6,64 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 6 August 2026 (session 2)
+
+**Linn tab rebuilt as a rolling master sheet + two new automations**
+
+- Renamed "Linn 2026" → "Linn" — one continuous tab for all orders 2026 onward, no more yearly copy of Template (Template tab since deleted by Jon)
+- Rewrote "Overall" tab formulas for 2026–2032 to pull year-filtered COUNTIFS from Linn instead of hardcoded per-year tab references
+- Deleted unused helper columns (Q/R/S) and the cFullName column (not needed) from Linn — layout is now A–G: nOrderId/ChannelReference/dReceievedDate/Country/ProcessedDate/Source/SubSource
+- Built `linnworks-weekly-orders-to-linn.ts` — weekly fetch of dispatched + still-open Spin Care/EBAY1 orders from Linnworks, filtered/deduped, appended to Linn; still-open orders get a received+24h placeholder ProcessedDate; a reconciliation pass corrects placeholders to the real dispatch date once known (21-day lookback)
+- Fixed "Time Between" column to account for weekends + UK bank holidays + Christmas: new "Bank Holidays" tab + NETWORKDAYS-based formula (replaced an earlier Friday/12:45pm-only hack that broke on same-day Friday dispatches)
+- Built `bank-holidays-to-sheets.ts` — pulls the gov.uk bank holidays feed, adds new dates automatically, adds a Christmas Eve entry per year (Ogden-specific closure); idempotent
+- Fixed a Dependabot high-severity alert (`brace-expansion`, dev-only) via `npm audit fix`
+
+**Decisions**
+- Cron-job.org (not GitHub schedule) for both new automations — weekly orders job already added by Jon; bank holidays job added as **monthly**
+- "Time Between" floored at 0 rather than only correcting genuinely-delayed orders — simpler, and negatives were mostly Jon's own old manually copy-pasted weekend placeholder dates anyway (confirmed harmless)
+- Bank Holidays list scoped to 2026 onwards (matches Linn tab's data range); currently covers through 2028 since that's as far as gov.uk has published
+- `LET()` combined with a cross-sheet NETWORKDAYS reference threw a Sheets formula error for no clear reason — switched to nested `IF` instead of digging further
+
+**Files changed/created**
+- `src/cli/linnworks-weekly-orders-to-linn.ts` — new
+- `.github/workflows/linnworks-weekly-orders-to-linn.yml` — new, workflow_dispatch only
+- `src/cli/debug-linnworks-orders-raw.ts` + `.github/workflows/debug-linnworks-orders-raw.yml` — new, read-only diagnostic, left in repo for future field-name checks
+- `src/cli/bank-holidays-to-sheets.ts` — new
+- `.github/workflows/bank-holidays-to-sheets.yml` — new, workflow_dispatch only
+- `package-lock.json` — brace-expansion bump
+- Google Sheet `1LSCRaHwsLBUFAg7DuRAaa8L5wDOfB7upQZ4Hb7-sayo` — Linn tab renamed/restructured, Overall formulas rewritten, new "Bank Holidays" tab, Template tab deleted (not git-tracked, noted here for reference)
+
+**Next steps**
+- None critical — both new automations are live and scheduled via Cron-job.org
+- Historical Linn rows with old weekend-placeholder ProcessedDate values left as-is (Jon confirmed acceptable)
+
+---
+
+### 6 August 2026
+
+**Disposals — Yearly Data rollup: item cost value added**
+
+- Yearly Data rollup previously wrote only the removal fee (disposal cost) per month
+- Updated to include Item Cost Value = FBA UK Landed Cost (Cost tab) × disposed quantity, matching the Dashboard's ARRAYFORMULA exactly
+- Dashboard formula uses `VLOOKUP(ASIN, Cost!$H$2:$I, 2, FALSE)` — lookup key is Cost tab **col H** (ASIN), value is col I (FBA UK Landed Cost)
+- Three iterations to get the lookup right: first tried SKU/col G, then tried col C ASIN, finally fixed to col H ASIN
+- Verified: Jul UK = £225.39, Jul EU = £132.87 — matches Dashboard
+
+**Files changed**
+- `src/cli/disposals-to-sheets.ts` — Yearly Data rollup now includes item cost value; cost lookup uses Cost!H:I keyed on ASIN (Disposals Data col E)
+
+**Commits**
+- `df2965b` — feat(disposals): include item cost value in Yearly Data rollup
+- `42ebfb2` — fix(disposals): fix SKU lookup — try FBA SKU then SKU (superseded)
+- `0972e40` — fix(disposals): match Cost tab by ASIN not SKU
+- `80caeb3` — fix(disposals): use Cost!H:I for ASIN lookup matching Dashboard formula
+
+**Next steps**
+- Run disposals script monthly after Amazon report comes through
+- Yearly Data J/K/L will auto-update on every run (idempotent)
+
+---
+
 ### 30 July 2026 (session 2)
 
 **AGL Delivery Date Sync — new task added**
