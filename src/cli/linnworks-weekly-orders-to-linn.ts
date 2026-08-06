@@ -190,12 +190,9 @@ async function main() {
 
   const now        = new Date();
   const thisMonday = mondayOfUTC(now);
-  // TEMPORARY — testing against the current in-progress week instead of last
-  // week, since last week is already fully covered manually. Revert to
-  // (thisMonday - 7 days) → (thisMonday - 1ms) once this test is done.
-  const weekStart  = thisMonday;
-  const weekEnd    = now;
-  console.log(`Target week (TEST — current week so far): ${weekStart.toISOString()} → ${weekEnd.toISOString()}`);
+  const weekStart  = new Date(thisMonday.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weekEnd    = new Date(thisMonday.getTime() - 1);
+  console.log(`Target week: ${weekStart.toISOString()} → ${weekEnd.toISOString()}`);
 
   const session = await getLinnworksSession();
   console.log(`Session OK. Server: ${session.server}`);
