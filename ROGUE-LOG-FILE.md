@@ -6,6 +6,32 @@ Running log of sessions, decisions, and changes made to operator-datacore.
 
 ## Session Log
 
+### 7 August 2026
+
+**Bank Holidays tab — rolling 3-year window**
+
+- Changed `bank-holidays-to-sheets.ts` so the "Bank Holidays" tab no longer grows forever
+- Each run now keeps only current year + next 2 years, drops any year that's fallen out of the window, and adds newly-published dates for the window
+- Tab stays capped at 28 rows (header + 27 dates: 9 dates × 3 years)
+
+**Decisions**
+- 3-year rolling window (current + next 2), matching gov.uk's ~2-years-ahead publishing pace
+
+**Files changed**
+- `src/cli/bank-holidays-to-sheets.ts` — rolling window logic, clears tab before rewrite (needed since the row count can now shrink)
+
+**Testing**
+- Ran live against the real sheet — steady state, no false changes (window already matched)
+- Verified the "drop oldest year" logic in an isolated simulation (pretend run in Jan 2027 against 2026-2028 data correctly kept 2027-2028, dropped 2026)
+
+**Next steps**
+- None — monthly Cron-job.org schedule already covers this, no changes needed there
+
+**Commits**
+- `a49599f` — feat(bank-holidays): rolling 3-year window instead of ever-growing list
+
+---
+
 ### 6 August 2026 (session 2)
 
 **Linn tab rebuilt as a rolling master sheet + two new automations**
